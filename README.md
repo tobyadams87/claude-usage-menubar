@@ -15,6 +15,10 @@ A tiny macOS menu bar app that shows your **Claude weekly and 5-hour usage limit
 - The mascot blinks, shuffles and waves now and then (click it for a reaction)
 - Native Swift, a single ~150 KB binary, no dependencies. It polls every 5 minutes and is idle otherwise.
 
+<p align="center"><img src="menubar-states.png" width="720" alt="The menu bar item in its yellow, orange and red warning states"></p>
+
+<p align="center"><em>Warning colors as you near a limit. Weekly and 5-hour usage are colored independently.</em></p>
+
 ## Install
 
 Requires macOS 13+ and the Xcode command line tools (`xcode-select --install`).
