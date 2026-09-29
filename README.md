@@ -4,7 +4,7 @@
 
 A tiny macOS menu bar app that shows your **Claude weekly and 5-hour usage limits** at a glance, with a little pixel mascot.
 
-<p align="center"><img src="screenshot.png" width="360" alt="ClaudeUsage in the macOS menu bar: weekly and 5-hour usage with reset countdowns"></p>
+<p align="center"><img src="screenshot.png?v=2" width="360" alt="ClaudeUsage in the macOS menu bar: weekly and 5-hour usage with reset countdowns"></p>
 
 <p align="center"><em>The menu bar item (high-resolution render): weekly usage on top, 5-hour usage below, each with time until reset.</em></p>
 
