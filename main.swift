@@ -65,32 +65,9 @@ enum Store {
     static func clear() { SecItemDelete(query as CFDictionary) }
 }
 
-// Pixel mascot drawn from a 12x8 grid (vector, so it's crisp at any scale, no image assets).
-enum Pose { case rest, blink, step, waveL, waveR }
-
-func mascotImage(cell: CGFloat = 1.5, pose: Pose = .rest) -> NSImage {
-    var grid = Array(repeating: Array(repeating: false, count: 12), count: 8)
-    func fill(_ rows: ClosedRange<Int>, _ cols: [Int]) { for r in rows { for c in cols { grid[r][c] = true } } }
-    fill(0...5, Array(2...9))                                   // head/body
-    fill(2...3, Array(0...11))                                  // arms
-    fill(6...7, pose == .step ? [3, 4, 7, 8] : [2, 4, 7, 9])    // legs
-    if pose == .waveL { for c in [0, 1] { grid[3][c] = false; grid[1][c] = true } }
-    if pose == .waveR { for c in [10, 11] { grid[3][c] = false; grid[1][c] = true } }
-    let body = NSColor(srgbRed: 0.85, green: 0.47, blue: 0.36, alpha: 1)
-    let eyes: Set<[Int]> = [[1, 3], [1, 8]]   // [row, col]
-    let img = NSImage(size: NSSize(width: 12 * cell, height: 8 * cell), flipped: true) { _ in
-        for r in 0..<8 { for c in 0..<12 where grid[r][c] {
-            (eyes.contains([r, c]) && pose != .blink ? NSColor.black : body).setFill()
-            NSRect(x: CGFloat(c) * cell, y: CGFloat(r) * cell, width: cell, height: cell).fill()
-        } }
-        return true
-    }
-    img.isTemplate = false
-    return img
-}
-
 // Newest first. Keep the top entry in sync with CFBundleShortVersionString in build.sh.
 let changelog: [(version: String, notes: [String])] = [
+    ("1.0.1", ["Separator dots now line up exactly between the two rows", "Menu bar item is never wider than before; drawing code moved to MenuBarArt.swift"]),
     ("1.0", ["Added About page with changelog and credits", "Menu shows when usage last refreshed and when the next refresh is",
              "New app icon"]),
     ("0.8", ["Weekly reset countdown now shown in the menu bar", "Dropdown shows one line per limit"]),
@@ -134,8 +111,7 @@ final class App: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigation
     var lastAttempt: Date?
     var lastOK = true
     var pose: Pose = .rest
-    var lastTop: NSAttributedString?
-    var lastBottom: NSAttributedString?
+    var lastRows: [BarRow]?
     var plainText: String?
     var tick: Timer?
     var popups: [NSWindow] = []
@@ -151,6 +127,8 @@ final class App: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigation
 
     func applicationDidFinishLaunching(_ n: Notification) {
         setupMainMenu()
+        item.autosaveName = "ClaudeUsageMenuBar"   // own stable slot, not a generic "Item-N"
+        item.isVisible = true
         item.button?.image = mascotImage()
         item.button?.imagePosition = .imageLeft
         item.button?.imageHugsTitle = true
@@ -564,7 +542,7 @@ final class App: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigation
 
     func setPose(_ p: Pose) {
         pose = p
-        if let t = lastTop, let b = lastBottom, plainText == nil { setStacked(t, b) }
+        if let rows = lastRows, plainText == nil { setStacked(rows) }
         else if let txt = plainText { setPlain(txt) }
     }
 
@@ -574,27 +552,16 @@ final class App: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigation
         // Reset time has passed: numbers are stale, fetch fresh ones.
         if let r = u.sessionReset, r < now, !inFlight { refresh() }
 
-        // Menu bar: mascot + two stacked lines (weekly on top; 5-hour and its countdown below).
-        let mono9 = { (w: NSFont.Weight) in NSFont.monospacedDigitSystemFont(ofSize: 9, weight: w) }
-        func line(_ parts: [(String, Double?)]) -> NSAttributedString {
-            let out = NSMutableAttributedString()
-            for (t, pct) in parts {
-                let c = pct.flatMap { Self.color(for: $0) }
-                out.append(NSAttributedString(string: t, attributes: [
-                    .font: mono9(pct == nil ? .regular : .semibold),
-                    .foregroundColor: c ?? NSColor.labelColor]))
-            }
-            return out
+        // Menu bar: mascot + two aligned rows (weekly on top; 5-hour below), each with its countdown.
+        func cd(_ d: Date?) -> String? {
+            guard let d, d > now else { return nil }
+            return Self.countdown(d.timeIntervalSince(now), compact: true)
         }
-        var topParts: [(String, Double?)] = [("wk ", nil), ("\(Int(u.weekly.rounded()))%", u.weekly)]
-        if let r = u.weeklyReset, r > now { topParts.append((" · \(Self.countdown(r.timeIntervalSince(now), compact: true))", nil)) }
-        let top = line(topParts)
-        var bottomParts: [(String, Double?)] = []
+        var rows = [BarRow(label: "wk", pct: "\(Int(u.weekly.rounded()))%", color: Self.color(for: u.weekly), time: cd(u.weeklyReset))]
         if let s = u.session {
-            bottomParts = [("5h ", nil), ("\(Int(s.rounded()))%", s)]
-            if let r = u.sessionReset, r > now { bottomParts.append((" · \(Self.countdown(r.timeIntervalSince(now), compact: true))", nil)) }
+            rows.append(BarRow(label: "5h", pct: "\(Int(s.rounded()))%", color: Self.color(for: s), time: cd(u.sessionReset)))
         }
-        setStacked(top, line(bottomParts))
+        setStacked(rows)
 
         // Menu detail
         var w = "Weekly: \(Int(u.weekly.rounded()))% used"
@@ -617,25 +584,11 @@ final class App: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigation
         return "\(m / 1440)d\(sp)\((m % 1440) / 60)h"
     }
 
-    // Composite image: mascot + two text lines. Drawn with dynamic colors so it follows light/dark mode.
-    func setStacked(_ top: NSAttributedString, _ bottom: NSAttributedString) {
-        lastTop = top; lastBottom = bottom; plainText = nil
-        let mascot = mascotImage(pose: pose)
-        let ts = top.size(), bs = bottom.size()
-        let gap: CGFloat = 4, H: CGFloat = 22
-        let w = mascot.size.width + gap + ceil(max(ts.width, bs.width))
-        let img = NSImage(size: NSSize(width: w, height: H), flipped: false) { _ in
-            mascot.draw(in: NSRect(x: 0, y: (H - mascot.size.height) / 2, width: mascot.size.width, height: mascot.size.height))
-            let x = mascot.size.width + gap
-            let total = ts.height + bs.height - 2
-            let y0 = (H - total) / 2
-            bottom.draw(at: NSPoint(x: x, y: y0))
-            top.draw(at: NSPoint(x: x, y: y0 + bs.height - 2))
-            return true
-        }
-        img.isTemplate = false
+    // Composite image: mascot + aligned text rows (see MenuBarArt.swift). Dynamic colors follow light/dark mode.
+    func setStacked(_ rows: [BarRow]) {
+        lastRows = rows; plainText = nil
         item.button?.attributedTitle = NSAttributedString(string: "")
-        item.button?.image = img
+        item.button?.image = BarLayout.image(rows: rows, pose: pose)
         item.button?.imagePosition = .imageOnly
     }
 

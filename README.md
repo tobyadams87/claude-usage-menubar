@@ -48,7 +48,8 @@ This is an unofficial community project. It is not affiliated with, endorsed by,
 
 | File | Purpose |
 |---|---|
-| `main.swift` | The whole app |
+| `main.swift` | The app: sign-in, polling, menus, About |
+| `MenuBarArt.swift` | Draws the menu bar item (mascot and aligned rows) |
 | `makeicon.swift` | Generates the app icon from the pixel mascot |
 | `build.sh` | Builds and ad-hoc signs `ClaudeUsage.app` |
 
