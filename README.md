@@ -22,7 +22,7 @@ Requires macOS 13+ and the Xcode command line tools (`xcode-select --install`).
 ```bash
 git clone https://github.com/tobyadams87/claude-usage-menubar.git
 cd claude-usage-menubar
-./build.sh
+zsh build.sh
 open ClaudeUsage.app
 ```
 
