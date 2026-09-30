@@ -65,6 +65,12 @@ This is an unofficial community project. It is not affiliated with, endorsed by,
 | `makeicon.swift` | Generates the app icon from the pixel mascot |
 | `build.sh` | Builds and ad-hoc signs `ClaudeUsage.app` |
 
+## Support
+
+ClaudeUsage is free, and it always will be. If you find it useful and want to say thanks, you're welcome to [buy me a coffee on Ko-fi](https://ko-fi.com/mradams). No pressure at all.
+
+<p align="center"><a href="https://ko-fi.com/mradams"><img src="kofi-button.svg" width="220" alt="Support me on Ko-fi"></a></p>
+
 ## Credits
 
 Made by [@tobyadams](https://x.com/tobyadams) and Claude Code (Sonnet 5.5).
