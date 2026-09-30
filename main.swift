@@ -196,33 +196,40 @@ final class App: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigation
             let l = NSTextField(labelWithString: t)
             l.font = font; l.textColor = color; l.alignment = .center
             l.lineBreakMode = .byWordWrapping; l.maximumNumberOfLines = 0
-            l.preferredMaxLayoutWidth = 340
+            l.preferredMaxLayoutWidth = 380
             return l
         }
         let icon = NSImageView(image: NSApp.applicationIconImage)
-        icon.widthAnchor.constraint(equalToConstant: 80).isActive = true
-        icon.heightAnchor.constraint(equalToConstant: 80).isActive = true
+        icon.widthAnchor.constraint(equalToConstant: 88).isActive = true
+        icon.heightAnchor.constraint(equalToConstant: 88).isActive = true
 
         let text = NSMutableAttributedString()
         let body = NSFont.systemFont(ofSize: 12), head = NSFont.boldSystemFont(ofSize: 13)
+        let headStyle = NSMutableParagraphStyle(); headStyle.paragraphSpacing = 4
+        let bulletStyle = NSMutableParagraphStyle()       // wrapped lines line up under the text, not the bullet
+        bulletStyle.firstLineHeadIndent = 2; bulletStyle.headIndent = 16
+        bulletStyle.tabStops = [NSTextTab(textAlignment: .left, location: 16)]
+        bulletStyle.paragraphSpacing = 3
         for (i, e) in changelog.enumerated() {
-            text.append(NSAttributedString(string: (i == 0 ? "" : "\n") + "Version \(e.version)\n",
-                                           attributes: [.font: head, .foregroundColor: NSColor.labelColor]))
+            if i > 0 { text.append(NSAttributedString(string: "\n", attributes: [.font: NSFont.systemFont(ofSize: 6)])) }
+            text.append(NSAttributedString(string: "Version \(e.version)\n",
+                                           attributes: [.font: head, .foregroundColor: NSColor.labelColor, .paragraphStyle: headStyle]))
             for n in e.notes {
-                text.append(NSAttributedString(string: "•  \(n)\n", attributes: [.font: body, .foregroundColor: NSColor.secondaryLabelColor]))
+                text.append(NSAttributedString(string: "•\t\(n)\n", attributes: [
+                    .font: body, .foregroundColor: NSColor.secondaryLabelColor, .paragraphStyle: bulletStyle]))
             }
         }
         let tv = NSTextView(frame: .zero)
         tv.isEditable = false; tv.drawsBackground = false
-        tv.textContainerInset = NSSize(width: 8, height: 8)
+        tv.textContainerInset = NSSize(width: 10, height: 10)
         tv.textStorage?.setAttributedString(text)
         let scroll = NSScrollView()
         scroll.documentView = tv
         scroll.hasVerticalScroller = true; scroll.drawsBackground = false
         scroll.borderType = .bezelBorder
         tv.autoresizingMask = [.width]
-        scroll.heightAnchor.constraint(equalToConstant: 200).isActive = true
-        scroll.widthAnchor.constraint(equalToConstant: 340).isActive = true
+        scroll.heightAnchor.constraint(equalToConstant: 230).isActive = true
+        scroll.widthAnchor.constraint(equalToConstant: 380).isActive = true
 
         // Credit line with a clickable X handle.
         let credit = NSTextField(labelWithAttributedString: {
@@ -238,12 +245,13 @@ final class App: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigation
         }())
         credit.allowsEditingTextAttributes = true
         credit.isSelectable = true
+        credit.preferredMaxLayoutWidth = 380; credit.lineBreakMode = .byWordWrapping; credit.maximumNumberOfLines = 0
 
         // Link to the repository (source, issues, releases).
         let repo = NSTextField(labelWithAttributedString: {
             let f = NSFont.systemFont(ofSize: 11)
             let dim: [NSAttributedString.Key: Any] = [.font: f, .foregroundColor: NSColor.secondaryLabelColor]
-            let a = NSMutableAttributedString(string: "Source, issues and releases: ", attributes: dim)
+            let a = NSMutableAttributedString(string: "", attributes: dim)
             a.append(NSAttributedString(string: "github.com/tobyadams87/claude-usage-menubar", attributes: [
                 .font: f, .link: URL(string: "https://github.com/tobyadams87/claude-usage-menubar")!]))
             a.addAttribute(.paragraphStyle, value: { let p = NSMutableParagraphStyle(); p.alignment = .center; return p }(),
@@ -252,6 +260,7 @@ final class App: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigation
         }())
         repo.allowsEditingTextAttributes = true
         repo.isSelectable = true
+        repo.preferredMaxLayoutWidth = 380; repo.lineBreakMode = .byWordWrapping; repo.maximumNumberOfLines = 0
 
         let stack = NSStackView(views: [icon,
             label("ClaudeUsage", .boldSystemFont(ofSize: 18)),
@@ -261,11 +270,18 @@ final class App: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigation
             repo,
             label("Changelog", .boldSystemFont(ofSize: 12)),
             scroll])
-        stack.orientation = .vertical; stack.alignment = .centerX; stack.spacing = 8
-        stack.edgeInsets = NSEdgeInsets(top: 20, left: 20, bottom: 20, right: 20)
-        stack.setCustomSpacing(14, after: stack.views[5])
+        stack.orientation = .vertical; stack.alignment = .centerX; stack.spacing = 10
+        stack.edgeInsets = NSEdgeInsets(top: 28, left: 20, bottom: 24, right: 20)
+        stack.widthAnchor.constraint(equalToConstant: 420).isActive = true     // fixed, so nothing can push the edges out
+        stack.setCustomSpacing(14, after: stack.views[0])   // icon
+        stack.setCustomSpacing(4, after: stack.views[1])    // name
+        stack.setCustomSpacing(14, after: stack.views[2])   // version
+        stack.setCustomSpacing(14, after: stack.views[3])   // description
+        stack.setCustomSpacing(4, after: stack.views[4])    // credit
+        stack.setCustomSpacing(22, after: stack.views[5])   // repo link
+        stack.setCustomSpacing(8, after: stack.views[6])    // "Changelog"
 
-        let w = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 380, height: 470),
+        let w = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 420, height: 520),
                          styleMask: [.titled, .closable], backing: .buffered, defer: false)
         w.title = "About ClaudeUsage"
         w.contentView = stack

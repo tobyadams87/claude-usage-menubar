@@ -34,13 +34,19 @@ func draw(_ px: Int) -> Data {
     let rows: [[Int]] = [Array(2...9), Array(2...9), Array(0...11), Array(0...11),
                          Array(2...9), Array(2...9), [2, 4, 7, 9], [2, 4, 7, 9]]
     let body = NSColor(srgbRed: 0.85, green: 0.47, blue: 0.36, alpha: 1)
+    // Snap every cell edge to a whole device pixel (and don't antialias): neighbouring cells then share
+    // exact edges, so no faint seams show between the mascot's pixels at any icon size.
+    ctx.shouldAntialias = false
     for (ri, cols) in rows.enumerated() {
         for c in cols {
             let eye = (ri == 1 && (c == 3 || c == 8))
             (eye ? NSColor.black : body).setFill()
-            r(ox + CGFloat(c) * cell, oy - CGFloat(ri + 1) * cell, cell, cell).fill()
+            let x0 = ((ox + CGFloat(c) * cell) * s).rounded(), x1 = ((ox + CGFloat(c + 1) * cell) * s).rounded()
+            let y0 = ((oy - CGFloat(ri + 1) * cell) * s).rounded(), y1 = ((oy - CGFloat(ri) * cell) * s).rounded()
+            NSRect(x: x0, y: y0, width: x1 - x0, height: y1 - y0).fill()
         }
     }
+    ctx.shouldAntialias = true
 
     // Usage bar under the mascot
     let bw: CGFloat = 480, bh: CGFloat = 44
