@@ -595,20 +595,37 @@ final class App: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigation
         } else { sessionProjItem.isHidden = true }
     }
 
+    // Info lines are custom views rather than plain menu items: macOS dims disabled items (which would
+    // wash out the bold usage lines), but leaves custom views alone. Left inset matches the text of the
+    // regular items, which leave room for the checkmark column.
+    static let infoInset: CGFloat = 30
+
+    func infoView(_ text: NSAttributedString, height: CGFloat) -> NSView {
+        let label = NSTextField(labelWithAttributedString: text)
+        label.sizeToFit()
+        let view = NSView(frame: NSRect(x: 0, y: 0, width: Self.infoInset + label.frame.width + 16, height: height))
+        label.frame.origin = NSPoint(x: Self.infoInset, y: (height - label.frame.height) / 2)
+        view.addSubview(label)
+        view.autoresizingMask = [.width]
+        return view
+    }
+
     // The facts (usage, limit, reset time): bold and full strength.
     func setMain(_ item: NSMenuItem, _ text: String) {
-        item.attributedTitle = NSAttributedString(string: text, attributes: [
+        item.title = text
+        item.view = infoView(NSAttributedString(string: text, attributes: [
             .font: NSFont.systemFont(ofSize: 13, weight: .semibold),
-            .foregroundColor: NSColor.labelColor])
+            .foregroundColor: NSColor.labelColor]), height: 24)
     }
 
     // The forecast: smaller and lighter, so it reads as secondary to the line above it.
     func setProjection(_ item: NSMenuItem, _ text: String?, warn: Bool) {
         guard let text else { item.isHidden = true; return }
         item.isHidden = false
-        item.attributedTitle = NSAttributedString(string: text, attributes: [
+        item.title = text
+        item.view = infoView(NSAttributedString(string: text, attributes: [
             .font: NSFont.systemFont(ofSize: 11, weight: .regular),
-            .foregroundColor: warn ? NSColor.systemOrange : NSColor.secondaryLabelColor])
+            .foregroundColor: warn ? NSColor.systemOrange : NSColor.secondaryLabelColor]), height: 18)
     }
 
     static func countdown(_ secs: TimeInterval, compact: Bool = false) -> String {
