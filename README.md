@@ -20,7 +20,7 @@ A tiny macOS menu bar app that shows your **Claude weekly and 5-hour usage limit
 
 <p align="center"><em>Warning colors as you near a limit. Weekly and 5-hour usage are colored independently.</em></p>
 
-<p align="center"><img src="dropdown.png" width="428" alt="The ClaudeUsage dropdown: usage and reset times in bold, a usage bar under each limit, and an at-this-pace prediction"></p>
+<p align="center"><img src="dropdown-menu.png" width="428" alt="The ClaudeUsage dropdown: usage and reset times in bold, a usage bar under each limit, and an at-this-pace prediction"></p>
 
 <p align="center"><em>The dropdown: usage and reset times in bold, a usage bar for each limit, and an "at this pace" prediction (orange when you're on track to run out).</em></p>
 
