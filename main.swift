@@ -67,6 +67,7 @@ enum Store {
 
 // Newest first. Keep the top entry in sync with CFBundleShortVersionString in build.sh.
 let changelog: [(version: String, notes: [String])] = [
+    ("1.2.0", ["About checks GitHub for a newer release and offers a download button when there is one", "Only checks when you open About; nothing runs in the background"]),
     ("1.1.1", ["About window: roomier layout, and a link to the GitHub repo", "App icon: removed faint seams between the mascot's pixels"]),
     ("1.1.0", ["Dropdown now predicts how your usage is going, like the Claude app: \"At this pace you'll run out Monday morning, before Tuesday's reset\", or how much you're on pace to use by reset", "Works for both the weekly and 5-hour limits"]),
     ("1.0.1", ["Separator dots now line up exactly between the two rows", "Menu bar item is never wider than before; drawing code moved to MenuBarArt.swift"]),
@@ -108,6 +109,7 @@ final class App: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigation
 
     var loginWindow: NSWindow?
     var aboutWindow: NSWindow?
+    var updateURL: URL?
     var webView: WKWebView?
     var checkingLogin = false
     var loginPoll: Timer?
@@ -191,7 +193,7 @@ final class App: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigation
 
     @objc func showAbout() {
         if let w = aboutWindow { NSApp.activate(ignoringOtherApps: true); w.makeKeyAndOrderFront(nil); return }
-        let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "dev"
+        let version = UpdateChecker.currentVersion
 
         func label(_ t: String, _ font: NSFont, _ color: NSColor = .labelColor) -> NSTextField {
             let l = NSTextField(labelWithString: t)
@@ -263,24 +265,34 @@ final class App: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigation
         repo.isSelectable = true
         repo.preferredMaxLayoutWidth = 380; repo.lineBreakMode = .byWordWrapping; repo.maximumNumberOfLines = 0
 
-        let stack = NSStackView(views: [icon,
-            label("ClaudeUsage", .boldSystemFont(ofSize: 18)),
-            label("Version \(version)", .systemFont(ofSize: 12), .secondaryLabelColor),
-            label("Shows your Claude weekly and 5-hour usage limits in the menu bar. Uses an unofficial claude.ai endpoint and is not affiliated with Anthropic.", .systemFont(ofSize: 11), .secondaryLabelColor),
-            credit,
-            repo,
-            label("Changelog", .boldSystemFont(ofSize: 12)),
-            scroll])
+        // Update status (filled in once GitHub answers): label, download button, and how to install it.
+        let updateLabel = label("Checking for updates…", .systemFont(ofSize: 11), .secondaryLabelColor)
+        let updateButton = NSButton(title: "Download", target: self, action: #selector(downloadUpdate))
+        updateButton.bezelStyle = .rounded; updateButton.controlSize = .small; updateButton.isHidden = true
+        let updateHint = label("Quit ClaudeUsage, unzip the download and replace the old app. The first time, right-click it and choose Open (it isn't notarized).",
+                               .systemFont(ofSize: 10), .secondaryLabelColor)
+        updateHint.isHidden = true
+
+        let nameLabel = label("ClaudeUsage", .boldSystemFont(ofSize: 18))
+        let versionLabel = label("Version \(version)", .systemFont(ofSize: 12), .secondaryLabelColor)
+        let descLabel = label("Shows your Claude weekly and 5-hour usage limits in the menu bar. Uses an unofficial claude.ai endpoint and is not affiliated with Anthropic.", .systemFont(ofSize: 11), .secondaryLabelColor)
+        let changeLabel = label("Changelog", .boldSystemFont(ofSize: 12))
+
+        let stack = NSStackView(views: [icon, nameLabel, versionLabel, updateLabel, updateButton, updateHint,
+                                        descLabel, credit, repo, changeLabel, scroll])
         stack.orientation = .vertical; stack.alignment = .centerX; stack.spacing = 10
         stack.edgeInsets = NSEdgeInsets(top: 28, left: 20, bottom: 24, right: 20)
         stack.widthAnchor.constraint(equalToConstant: 420).isActive = true     // fixed, so nothing can push the edges out
-        stack.setCustomSpacing(14, after: stack.views[0])   // icon
-        stack.setCustomSpacing(4, after: stack.views[1])    // name
-        stack.setCustomSpacing(14, after: stack.views[2])   // version
-        stack.setCustomSpacing(14, after: stack.views[3])   // description
-        stack.setCustomSpacing(4, after: stack.views[4])    // credit
-        stack.setCustomSpacing(22, after: stack.views[5])   // repo link
-        stack.setCustomSpacing(8, after: stack.views[6])    // "Changelog"
+        stack.setCustomSpacing(14, after: icon)
+        stack.setCustomSpacing(4, after: nameLabel)
+        stack.setCustomSpacing(6, after: versionLabel)
+        stack.setCustomSpacing(14, after: updateLabel)
+        stack.setCustomSpacing(6, after: updateButton)
+        stack.setCustomSpacing(14, after: updateHint)
+        stack.setCustomSpacing(14, after: descLabel)
+        stack.setCustomSpacing(4, after: credit)
+        stack.setCustomSpacing(22, after: repo)
+        stack.setCustomSpacing(8, after: changeLabel)
 
         let w = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 420, height: 520),
                          styleMask: [.titled, .closable], backing: .buffered, defer: false)
@@ -293,6 +305,31 @@ final class App: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigation
         aboutWindow = w
         NSApp.activate(ignoringOtherApps: true)
         w.makeKeyAndOrderFront(nil)
+
+        // Ask GitHub for the latest published release (once, only now that About is open).
+        UpdateChecker.fetchLatest { [weak self, weak w] info in
+            guard let self, let w, self.aboutWindow === w else { return }   // window was closed meanwhile
+            guard let info else { updateLabel.stringValue = "Couldn't check for updates right now"; return }
+            guard UpdateChecker.isNewer(info.version, than: version) else {
+                updateLabel.stringValue = "You're up to date"
+                return
+            }
+            updateLabel.stringValue = "Version \(info.version) is available"
+            updateLabel.font = .systemFont(ofSize: 12, weight: .semibold)
+            updateLabel.textColor = .controlAccentColor
+            self.updateURL = info.downloadURL ?? info.pageURL
+            updateButton.title = info.downloadURL != nil ? "Download v\(info.version)" : "View release v\(info.version)"
+            updateButton.isHidden = false
+            updateHint.isHidden = false
+            // grow the window downward to fit the new rows
+            let dh = stack.fittingSize.height - (w.contentView?.frame.height ?? stack.fittingSize.height)
+            var f = w.frame; f.size.height += dh; f.origin.y -= dh
+            w.setFrame(f, display: true, animate: true)
+        }
+    }
+
+    @objc func downloadUpdate() {
+        if let u = updateURL { NSWorkspace.shared.open(u) }
     }
 
     // MARK: Sign in / out
