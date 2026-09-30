@@ -239,16 +239,31 @@ final class App: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigation
         credit.allowsEditingTextAttributes = true
         credit.isSelectable = true
 
+        // Link to the repository (source, issues, releases).
+        let repo = NSTextField(labelWithAttributedString: {
+            let f = NSFont.systemFont(ofSize: 11)
+            let dim: [NSAttributedString.Key: Any] = [.font: f, .foregroundColor: NSColor.secondaryLabelColor]
+            let a = NSMutableAttributedString(string: "Source, issues and releases: ", attributes: dim)
+            a.append(NSAttributedString(string: "github.com/tobyadams87/claude-usage-menubar", attributes: [
+                .font: f, .link: URL(string: "https://github.com/tobyadams87/claude-usage-menubar")!]))
+            a.addAttribute(.paragraphStyle, value: { let p = NSMutableParagraphStyle(); p.alignment = .center; return p }(),
+                           range: NSRange(location: 0, length: a.length))
+            return a
+        }())
+        repo.allowsEditingTextAttributes = true
+        repo.isSelectable = true
+
         let stack = NSStackView(views: [icon,
             label("ClaudeUsage", .boldSystemFont(ofSize: 18)),
             label("Version \(version)", .systemFont(ofSize: 12), .secondaryLabelColor),
             label("Shows your Claude weekly and 5-hour usage limits in the menu bar. Uses an unofficial claude.ai endpoint and is not affiliated with Anthropic.", .systemFont(ofSize: 11), .secondaryLabelColor),
             credit,
+            repo,
             label("Changelog", .boldSystemFont(ofSize: 12)),
             scroll])
         stack.orientation = .vertical; stack.alignment = .centerX; stack.spacing = 8
         stack.edgeInsets = NSEdgeInsets(top: 20, left: 20, bottom: 20, right: 20)
-        stack.setCustomSpacing(14, after: stack.views[4])
+        stack.setCustomSpacing(14, after: stack.views[5])
 
         let w = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 380, height: 470),
                          styleMask: [.titled, .closable], backing: .buffered, defer: false)
