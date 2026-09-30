@@ -139,8 +139,6 @@ final class App: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigation
         item.button?.font = .monospacedDigitSystemFont(ofSize: NSFont.systemFontSize, weight: .regular)
 
         for i in [weeklyItem, weeklyProjItem, resetItem, sessionItem, sessionProjItem] { i.isEnabled = false; menu.addItem(i) }
-        weeklyProjItem.indentationLevel = 1
-        sessionProjItem.indentationLevel = 1
         weeklyProjItem.isHidden = true
         sessionProjItem.isHidden = true
         menu.addItem(.separator())
@@ -579,12 +577,12 @@ final class App: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigation
         // Menu detail
         var w = "Weekly: \(Int(u.weekly.rounded()))% used"
         if let r = u.weeklyReset, r > now { w += " · resets in \(Self.countdown(r.timeIntervalSince(now))) (\(Self.fmt(r)))" }
-        weeklyItem.title = w
+        setMain(weeklyItem, w)
         resetItem.isHidden = true
         if let s = u.session {
             var t = "5-hour: \(Int(s.rounded()))% used"
             if let r = u.sessionReset, r > now { t += " · resets in \(Self.countdown(r.timeIntervalSince(now))) (\(Self.timeFmt.string(from: r)))" }
-            sessionItem.title = t
+            setMain(sessionItem, t)
             sessionItem.isHidden = false
         } else { sessionItem.isHidden = true }
 
@@ -597,11 +595,19 @@ final class App: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigation
         } else { sessionProjItem.isHidden = true }
     }
 
+    // The facts (usage, limit, reset time): bold and full strength.
+    func setMain(_ item: NSMenuItem, _ text: String) {
+        item.attributedTitle = NSAttributedString(string: text, attributes: [
+            .font: NSFont.systemFont(ofSize: 13, weight: .semibold),
+            .foregroundColor: NSColor.labelColor])
+    }
+
+    // The forecast: smaller and lighter, so it reads as secondary to the line above it.
     func setProjection(_ item: NSMenuItem, _ text: String?, warn: Bool) {
         guard let text else { item.isHidden = true; return }
         item.isHidden = false
         item.attributedTitle = NSAttributedString(string: text, attributes: [
-            .font: NSFont.menuFont(ofSize: 12),
+            .font: NSFont.systemFont(ofSize: 11, weight: .regular),
             .foregroundColor: warn ? NSColor.systemOrange : NSColor.secondaryLabelColor])
     }
 
