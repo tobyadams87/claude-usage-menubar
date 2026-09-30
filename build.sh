@@ -5,7 +5,7 @@ cd "$(dirname "$0")"
 APP=ClaudeUsage.app
 rm -rf $APP
 mkdir -p $APP/Contents/MacOS $APP/Contents/Resources
-swiftc -O main.swift MenuBarArt.swift -o $APP/Contents/MacOS/ClaudeUsage
+swiftc -O main.swift MenuBarArt.swift Projection.swift -o $APP/Contents/MacOS/ClaudeUsage
 # App icon (generated from the pixel mascot)
 ICONSET=$(mktemp -d)/ClaudeUsage.iconset
 swiftc -O makeicon.swift -o "$(dirname "$ICONSET")/makeicon"
@@ -21,8 +21,8 @@ cat > $APP/Contents/Info.plist <<EOF
 <key>CFBundleIdentifier</key><string>local.claude-usage</string>
 <key>CFBundleName</key><string>ClaudeUsage</string>
 <key>CFBundlePackageType</key><string>APPL</string>
-<key>CFBundleVersion</key><string>1.0.1</string>
-<key>CFBundleShortVersionString</key><string>1.0.1</string>
+<key>CFBundleVersion</key><string>1.1.0</string>
+<key>CFBundleShortVersionString</key><string>1.1.0</string>
 <key>LSUIElement</key><true/>
 <key>LSMinimumSystemVersion</key><string>13.0</string>
 </dict></plist>

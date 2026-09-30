@@ -67,6 +67,7 @@ enum Store {
 
 // Newest first. Keep the top entry in sync with CFBundleShortVersionString in build.sh.
 let changelog: [(version: String, notes: [String])] = [
+    ("1.1.0", ["Dropdown now predicts how your usage is going, like the Claude app: \"At this pace you'll run out Monday morning, before Tuesday's reset\", or how much you're on pace to use by reset", "Works for both the weekly and 5-hour limits"]),
     ("1.0.1", ["Separator dots now line up exactly between the two rows", "Menu bar item is never wider than before; drawing code moved to MenuBarArt.swift"]),
     ("1.0", ["Added About page with changelog and credits", "Menu shows when usage last refreshed and when the next refresh is",
              "New app icon"]),
@@ -88,6 +89,8 @@ final class App: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigation
     let weeklyItem = NSMenuItem(title: "Weekly: …", action: nil, keyEquivalent: "")
     let resetItem = NSMenuItem(title: "", action: nil, keyEquivalent: "")
     let sessionItem = NSMenuItem(title: "", action: nil, keyEquivalent: "")
+    let weeklyProjItem = NSMenuItem(title: "", action: nil, keyEquivalent: "")
+    let sessionProjItem = NSMenuItem(title: "", action: nil, keyEquivalent: "")
     let signInItem = NSMenuItem(title: "Sign In…", action: #selector(showLogin), keyEquivalent: "")
     let signOutItem = NSMenuItem(title: "Sign Out", action: #selector(signOut), keyEquivalent: "")
     let updatedItem = NSMenuItem(title: "", action: nil, keyEquivalent: "")
@@ -135,7 +138,11 @@ final class App: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigation
         item.button?.title = "…"
         item.button?.font = .monospacedDigitSystemFont(ofSize: NSFont.systemFontSize, weight: .regular)
 
-        for i in [weeklyItem, resetItem, sessionItem] { i.isEnabled = false; menu.addItem(i) }
+        for i in [weeklyItem, weeklyProjItem, resetItem, sessionItem, sessionProjItem] { i.isEnabled = false; menu.addItem(i) }
+        weeklyProjItem.indentationLevel = 1
+        sessionProjItem.indentationLevel = 1
+        weeklyProjItem.isHidden = true
+        sessionProjItem.isHidden = true
         menu.addItem(.separator())
         updatedItem.isEnabled = false; menu.addItem(updatedItem)
         menu.addItem(.separator())
@@ -377,6 +384,8 @@ final class App: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigation
         weeklyItem.title = "Not signed in"
         resetItem.isHidden = true
         sessionItem.isHidden = true
+        weeklyProjItem.isHidden = true
+        sessionProjItem.isHidden = true
         updateAuthItems()
     }
 
@@ -471,7 +480,9 @@ final class App: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigation
         let iso2 = ISO8601DateFormatter()
         func date(_ d: [String: Any]?) -> Date? {
             guard let s = d?["resets_at"] as? String else { return nil }
-            return iso.date(from: s) ?? iso2.date(from: s)
+            // API times are like 03:59:59.7; round to the nearest minute so they read like the Claude app (4:00).
+            guard let t = iso.date(from: s) ?? iso2.date(from: s) else { return nil }
+            return Date(timeIntervalSince1970: (t.timeIntervalSince1970 / 60).rounded() * 60)
         }
         let five = j["five_hour"] as? [String: Any]
         return .success(Usage(weekly: w, weeklyReset: date(week),
@@ -492,6 +503,8 @@ final class App: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigation
             weeklyItem.title = e.message
             resetItem.isHidden = true
             sessionItem.isHidden = true
+            weeklyProjItem.isHidden = true
+            sessionProjItem.isHidden = true
             if case .unauthorized = e { signInItem.isHidden = false }
         }
     }
@@ -574,6 +587,22 @@ final class App: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigation
             sessionItem.title = t
             sessionItem.isHidden = false
         } else { sessionItem.isHidden = true }
+
+        // "At this pace..." predictions (same idea as the Claude app's usage page)
+        let wp = Projection.make(utilization: u.weekly, resetsAt: u.weeklyReset, window: 7 * 86400, now: now)
+        setProjection(weeklyProjItem, wp.weeklyText(resetsAt: u.weeklyReset, now: now), warn: wp.runsOutSoon)
+        if let s = u.session {
+            let sp = Projection.make(utilization: s, resetsAt: u.sessionReset, window: 5 * 3600, now: now)
+            setProjection(sessionProjItem, sp.sessionText(resetsAt: u.sessionReset, now: now), warn: sp.runsOutSoon)
+        } else { sessionProjItem.isHidden = true }
+    }
+
+    func setProjection(_ item: NSMenuItem, _ text: String?, warn: Bool) {
+        guard let text else { item.isHidden = true; return }
+        item.isHidden = false
+        item.attributedTitle = NSAttributedString(string: text, attributes: [
+            .font: NSFont.menuFont(ofSize: 12),
+            .foregroundColor: warn ? NSColor.systemOrange : NSColor.secondaryLabelColor])
     }
 
     static func countdown(_ secs: TimeInterval, compact: Bool = false) -> String {
