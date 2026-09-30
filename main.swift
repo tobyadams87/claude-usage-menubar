@@ -598,7 +598,7 @@ final class App: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigation
     // Info lines are custom views rather than plain menu items: macOS dims disabled items (which would
     // wash out the bold usage lines), but leaves custom views alone. Left inset matches the text of the
     // regular items, which leave room for the checkmark column.
-    static let infoInset: CGFloat = 30
+    static let infoInset: CGFloat = 28
 
     func infoView(_ text: NSAttributedString, height: CGFloat) -> NSView {
         let label = NSTextField(labelWithAttributedString: text)
