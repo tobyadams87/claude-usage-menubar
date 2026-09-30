@@ -43,22 +43,12 @@ enum Projection {
         return "\(weekday.string(from: d)) \(p)"
     }
 
-    // "Tuesday's reset", "tomorrow's reset", "today's reset"
-    static func resetPhrase(_ d: Date, now: Date, cal: Calendar = .current) -> String {
-        if cal.isDate(d, inSameDayAs: now) { return "today's reset" }
-        if let tomorrow = cal.date(byAdding: .day, value: 1, to: now), cal.isDate(d, inSameDayAs: tomorrow) {
-            return "tomorrow's reset"
-        }
-        return "\(weekday.string(from: d))'s reset"
-    }
-
     func weeklyText(resetsAt: Date?, now: Date = Date()) -> String? {
         switch self {
         case .none: return nil
         case .onPace(let p): return "On pace for about \(Int(p.rounded()))% by reset"
         case .runsOut(let d):
-            guard let r = resetsAt else { return nil }
-            return "At this pace you'll run out \(Self.dayPhrase(d, now: now)), before \(Self.resetPhrase(r, now: now))"
+            return "At this pace you'll run out \(Self.dayPhrase(d, now: now))"
         }
     }
 
@@ -67,8 +57,7 @@ enum Projection {
         case .none: return nil
         case .onPace(let p): return "On pace for about \(Int(p.rounded()))% by reset"
         case .runsOut(let d):
-            guard let r = resetsAt else { return nil }
-            return "At this pace you'll run out at \(Self.clock.string(from: d)), before the \(Self.clock.string(from: r)) reset"
+            return "At this pace you'll run out at \(Self.clock.string(from: d))"
         }
     }
 }
