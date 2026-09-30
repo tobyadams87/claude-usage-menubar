@@ -67,7 +67,7 @@ enum Store {
 
 // Newest first. Keep the top entry in sync with CFBundleShortVersionString in build.sh.
 let changelog: [(version: String, notes: [String])] = [
-    ("1.3.0", ["Dropdown shows a usage bar under the weekly and 5-hour limits, like the Claude usage page", "Bars turn yellow, orange and red at the same 60/80/90% points as the menu bar"]),
+    ("1.3.0", ["Dropdown shows a usage bar under the weekly and 5-hour limits, like the Claude usage page", "Bars turn yellow, orange and red at the same 60/80/90% points as the menu bar", "Shorter prediction wording, so the dropdown stays narrow"]),
     ("1.2.0", ["About checks GitHub for a newer release and offers a download button when there is one", "Only checks when you open About; nothing runs in the background"]),
     ("1.1.1", ["About window: roomier layout, and a link to the GitHub repo", "App icon: removed faint seams between the mascot's pixels"]),
     ("1.1.0", ["Dropdown now predicts how your usage is going, like the Claude app: \"At this pace you'll run out Monday morning, before Tuesday's reset\", or how much you're on pace to use by reset", "Works for both the weekly and 5-hour limits"]),
