@@ -67,6 +67,7 @@ enum Store {
 
 // Newest first. Keep the top entry in sync with CFBundleShortVersionString in build.sh.
 let changelog: [(version: String, notes: [String])] = [
+    ("1.3.0", ["Dropdown shows a usage bar under the weekly and 5-hour limits, like the Claude usage page", "Bars turn yellow, orange and red at the same 60/80/90% points as the menu bar"]),
     ("1.2.0", ["About checks GitHub for a newer release and offers a download button when there is one", "Only checks when you open About; nothing runs in the background"]),
     ("1.1.1", ["About window: roomier layout, and a link to the GitHub repo", "App icon: removed faint seams between the mascot's pixels"]),
     ("1.1.0", ["Dropdown now predicts how your usage is going, like the Claude app: \"At this pace you'll run out Monday morning, before Tuesday's reset\", or how much you're on pace to use by reset", "Works for both the weekly and 5-hour limits"]),
@@ -92,6 +93,10 @@ final class App: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigation
     let resetItem = NSMenuItem(title: "", action: nil, keyEquivalent: "")
     let sessionItem = NSMenuItem(title: "", action: nil, keyEquivalent: "")
     let weeklyProjItem = NSMenuItem(title: "", action: nil, keyEquivalent: "")
+    let weeklyBarItem = NSMenuItem(title: "", action: nil, keyEquivalent: "")
+    let sessionBarItem = NSMenuItem(title: "", action: nil, keyEquivalent: "")
+    let weeklyBar = UsageBarView(frame: NSRect(x: 0, y: 0, width: 300, height: 14))
+    let sessionBar = UsageBarView(frame: NSRect(x: 0, y: 0, width: 300, height: 14))
     let sessionProjItem = NSMenuItem(title: "", action: nil, keyEquivalent: "")
     let signInItem = NSMenuItem(title: "Sign In…", action: #selector(showLogin), keyEquivalent: "")
     let signOutItem = NSMenuItem(title: "Sign Out", action: #selector(signOut), keyEquivalent: "")
@@ -141,9 +146,18 @@ final class App: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigation
         item.button?.title = "…"
         item.button?.font = .monospacedDigitSystemFont(ofSize: NSFont.systemFontSize, weight: .regular)
 
-        for i in [weeklyItem, weeklyProjItem, resetItem, sessionItem, sessionProjItem] { i.isEnabled = false; menu.addItem(i) }
+        for bar in [weeklyBar, sessionBar] { bar.autoresizingMask = [.width] }
+        weeklyBarItem.view = weeklyBar
+        sessionBarItem.view = sessionBar
+        for i in [weeklyItem, weeklyBarItem, weeklyProjItem, resetItem, sessionItem, sessionBarItem, sessionProjItem] {
+            i.isEnabled = false; menu.addItem(i)
+        }
+        weeklyBarItem.isHidden = true
+        sessionBarItem.isHidden = true
         weeklyProjItem.isHidden = true
         sessionProjItem.isHidden = true
+        weeklyBarItem.isHidden = true
+        sessionBarItem.isHidden = true
         menu.addItem(.separator())
         updatedItem.isEnabled = false; menu.addItem(updatedItem)
         menu.addItem(.separator())
@@ -453,6 +467,8 @@ final class App: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigation
         sessionItem.isHidden = true
         weeklyProjItem.isHidden = true
         sessionProjItem.isHidden = true
+        weeklyBarItem.isHidden = true
+        sessionBarItem.isHidden = true
         updateAuthItems()
     }
 
@@ -572,6 +588,8 @@ final class App: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigation
             sessionItem.isHidden = true
             weeklyProjItem.isHidden = true
             sessionProjItem.isHidden = true
+            weeklyBarItem.isHidden = true
+            sessionBarItem.isHidden = true
             if case .unauthorized = e { signInItem.isHidden = false }
         }
     }
@@ -654,6 +672,16 @@ final class App: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigation
             setMain(sessionItem, t)
             sessionItem.isHidden = false
         } else { sessionItem.isHidden = true }
+
+        // Usage bars (blue normally; yellow/orange/red at the same thresholds as the menu bar)
+        weeklyBar.fraction = u.weekly / 100
+        weeklyBar.fillColor = Self.color(for: u.weekly) ?? .systemBlue
+        weeklyBarItem.isHidden = false
+        if let s = u.session {
+            sessionBar.fraction = s / 100
+            sessionBar.fillColor = Self.color(for: s) ?? .systemBlue
+            sessionBarItem.isHidden = false
+        } else { sessionBarItem.isHidden = true }
 
         // "At this pace..." predictions (same idea as the Claude app's usage page)
         let wp = Projection.make(utilization: u.weekly, resetsAt: u.weeklyReset, window: 7 * 86400, now: now)

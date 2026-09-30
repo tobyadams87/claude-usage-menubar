@@ -11,7 +11,7 @@ A tiny macOS menu bar app that shows your **Claude weekly and 5-hour usage limit
 - Weekly usage and time until it resets
 - 5-hour usage and time until it resets
 - Percentages turn yellow at 60%, orange at 80%, red at 90%
-- Dropdown with exact reset times, an "at this pace" prediction (like the Claude app's usage page), and when it last/next refreshed
+- Dropdown with usage bars (like the Claude usage page), exact reset times, an "at this pace" prediction (like the Claude app's usage page), and when it last/next refreshed
 - The mascot blinks, shuffles and waves now and then (click it for a reaction)
 - About checks GitHub for a newer release (only when you open it) and offers a download button if there is one
 - Native Swift, a single ~150 KB binary, no dependencies. It polls every 5 minutes and is idle otherwise.
@@ -60,6 +60,7 @@ This is an unofficial community project. It is not affiliated with, endorsed by,
 | `main.swift` | The app: sign-in, polling, menus, About |
 | `MenuBarArt.swift` | Draws the menu bar item (mascot and aligned rows) |
 | `UpdateChecker.swift` | Checks GitHub for a newer release (About window) |
+| `UsageBarView.swift` | The usage bars in the dropdown |
 | `Projection.swift` | The "at this pace you'll run out..." prediction |
 | `makeicon.swift` | Generates the app icon from the pixel mascot |
 | `build.sh` | Builds and ad-hoc signs `ClaudeUsage.app` |
