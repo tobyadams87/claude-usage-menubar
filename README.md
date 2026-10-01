@@ -12,13 +12,17 @@ A tiny macOS menu bar app that shows your **Claude weekly and 5-hour usage limit
 - 5-hour usage and time until it resets
 - Percentages turn yellow at 60%, orange at 80%, red at 90%
 - Dropdown with usage bars (like the Claude usage page), exact reset times, an "at this pace" prediction (like the Claude app's usage page), and when it last/next refreshed
-- The mascot blinks, shuffles and waves now and then (click it for a reaction)
+- The mascot changes color with your weekly pace (calm, amber, or red) and blinks, shuffles and waves now and then (click it for a reaction)
 - About checks GitHub for a newer release (only when you open it) and offers a download button if there is one
 - Native Swift, a single ~150 KB binary, no dependencies. It polls every 5 minutes and is idle otherwise.
 
 <p align="center"><img src="menubar-states.png" width="720" alt="The menu bar item in its yellow, orange and red warning states"></p>
 
 <p align="center"><em>Warning colors as you near a limit. Weekly and 5-hour usage are colored independently.</em></p>
+
+<p align="center"><img src="menubar-moods.png" width="720" alt="The mascot in its three moods: calm terracotta, amber, and red"></p>
+
+<p align="center"><em>The mascot follows your weekly pace. It stays calm unless you're on track to run out 12+ hours before the reset (amber) or 36+ hours before (red). Using it all up near the end of the week stays calm.</em></p>
 
 <p align="center"><img src="dropdown-menu.png" width="428" alt="The ClaudeUsage dropdown: usage and reset times in bold, a usage bar under each limit, and an at-this-pace prediction"></p>
 

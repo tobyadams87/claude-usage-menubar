@@ -19,6 +19,12 @@ enum Projection {
 
     var runsOutSoon: Bool { if case .runsOut = self { return true } else { return false } }
 
+    // How long you'd be locked out before the reset at this pace (0 if you won't run out).
+    func lockout(resetsAt: Date?) -> TimeInterval {
+        if case .runsOut(let d) = self, let r = resetsAt { return max(0, r.timeIntervalSince(d)) }
+        return 0
+    }
+
     // MARK: Wording
 
     private static func part(_ d: Date, _ cal: Calendar) -> String {

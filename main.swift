@@ -67,6 +67,7 @@ enum Store {
 
 // Newest first. Keep the top entry in sync with CFBundleShortVersionString in build.sh.
 let changelog: [(version: String, notes: [String])] = [
+    ("1.4.0", ["The mascot now shows your weekly pace: terracotta normally, amber if you are on track to run out 12+ hours before the reset, red at 36+ hours", "Based on how long you would be locked out, so using it all up near the end of the week stays calm"]),
     ("1.3.0", ["Dropdown shows a usage bar under the weekly and 5-hour limits, like the Claude usage page", "Bars turn yellow, orange and red at the same 60/80/90% points as the menu bar", "Shorter prediction wording, so the dropdown stays narrow"]),
     ("1.2.0", ["About checks GitHub for a newer release and offers a download button when there is one", "Only checks when you open About; nothing runs in the background"]),
     ("1.1.1", ["About window: roomier layout, and a link to the GitHub repo", "App icon: removed faint seams between the mascot's pixels"]),
@@ -122,6 +123,7 @@ final class App: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigation
     var lastAttempt: Date?
     var lastOK = true
     var pose: Pose = .rest
+    var mood: Mood = .calm      // follows the weekly pace; see Mood in MenuBarArt.swift
     var lastRows: [BarRow]?
     var plainText: String?
     var tick: Timer?
@@ -461,6 +463,7 @@ final class App: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigation
     }
 
     func showSignedOut() {
+        mood = .calm
         setPlain("Sign in")
         weeklyItem.title = "Not signed in"
         resetItem.isHidden = true
@@ -650,6 +653,10 @@ final class App: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigation
         // Reset time has passed: numbers are stale, fetch fresh ones.
         if let r = u.sessionReset, r < now, !inFlight { refresh() }
 
+        // Weekly pace sets the mascot's mood (how long you'd be locked out before the reset).
+        let wp = Projection.make(utilization: u.weekly, resetsAt: u.weeklyReset, window: 7 * 86400, now: now)
+        mood = Mood.forLockout(wp.lockout(resetsAt: u.weeklyReset))
+
         // Menu bar: mascot + two aligned rows (weekly on top; 5-hour below), each with its countdown.
         func cd(_ d: Date?) -> String? {
             guard let d, d > now else { return nil }
@@ -684,7 +691,6 @@ final class App: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigation
         } else { sessionBarItem.isHidden = true }
 
         // "At this pace..." predictions (same idea as the Claude app's usage page)
-        let wp = Projection.make(utilization: u.weekly, resetsAt: u.weeklyReset, window: 7 * 86400, now: now)
         setProjection(weeklyProjItem, wp.weeklyText(resetsAt: u.weeklyReset, now: now), warn: wp.runsOutSoon)
         if let s = u.session {
             let sp = Projection.make(utilization: s, resetsAt: u.sessionReset, window: 5 * 3600, now: now)
@@ -737,14 +743,14 @@ final class App: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigation
     func setStacked(_ rows: [BarRow]) {
         lastRows = rows; plainText = nil
         item.button?.attributedTitle = NSAttributedString(string: "")
-        item.button?.image = BarLayout.image(rows: rows, pose: pose)
+        item.button?.image = BarLayout.image(rows: rows, pose: pose, mood: mood)
         item.button?.imagePosition = .imageOnly
     }
 
     // Plain text state ("Sign in", "!", "…") next to the mascot.
     func setPlain(_ text: String) {
         plainText = text
-        item.button?.image = mascotImage(pose: pose)
+        item.button?.image = mascotImage(pose: pose, mood: mood)
         item.button?.imagePosition = .imageLeft
         item.button?.title = text
     }

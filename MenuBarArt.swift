@@ -7,8 +7,30 @@ import AppKit
 
 enum Pose { case rest, blink, step, waveL, waveR }
 
+// How worried the mascot is about the weekly limit: based on how long you'd be locked out before the
+// reset at your current pace (not on whether you run out at all, so using it all up near the end of
+// the week stays calm).
+enum Mood {
+    case calm, tight, danger
+
+    static let tightAfter: TimeInterval = 12 * 3600       // run out 12h+ before reset → amber
+    static let dangerAfter: TimeInterval = 36 * 3600      // run out 36h+ before reset → red
+
+    static func forLockout(_ seconds: TimeInterval) -> Mood {
+        seconds >= dangerAfter ? .danger : seconds >= tightAfter ? .tight : .calm
+    }
+
+    var bodyColor: NSColor {
+        switch self {
+        case .calm: return NSColor(srgbRed: 0.85, green: 0.47, blue: 0.36, alpha: 1)    // brand terracotta
+        case .tight: return NSColor(srgbRed: 0.96, green: 0.76, blue: 0.20, alpha: 1)   // amber
+        case .danger: return NSColor(srgbRed: 0.93, green: 0.18, blue: 0.20, alpha: 1)  // red
+        }
+    }
+}
+
 // Pixel mascot drawn from a 12x8 grid (vector, so it's crisp at any scale, no image assets).
-func mascotImage(cell: CGFloat = 1.5, pose: Pose = .rest) -> NSImage {
+func mascotImage(cell: CGFloat = 1.5, pose: Pose = .rest, mood: Mood = .calm) -> NSImage {
     var grid = Array(repeating: Array(repeating: false, count: 12), count: 8)
     func fill(_ rows: ClosedRange<Int>, _ cols: [Int]) { for r in rows { for c in cols { grid[r][c] = true } } }
     fill(0...5, Array(2...9))                                   // head/body
@@ -16,7 +38,7 @@ func mascotImage(cell: CGFloat = 1.5, pose: Pose = .rest) -> NSImage {
     fill(6...7, pose == .step ? [3, 4, 7, 8] : [2, 4, 7, 9])    // legs
     if pose == .waveL { for c in [0, 1] { grid[3][c] = false; grid[1][c] = true } }
     if pose == .waveR { for c in [10, 11] { grid[3][c] = false; grid[1][c] = true } }
-    let body = NSColor(srgbRed: 0.85, green: 0.47, blue: 0.36, alpha: 1)
+    let body = mood.bodyColor
     let eyes: Set<[Int]> = [[1, 3], [1, 8]]   // [row, col]
     let img = NSImage(size: NSSize(width: 12 * cell, height: 8 * cell), flipped: true) { _ in
         for r in 0..<8 { for c in 0..<12 where grid[r][c] {
@@ -74,8 +96,8 @@ enum BarLayout {
         return out
     }
 
-    static func image(rows: [BarRow], pose: Pose, textColor: NSColor = .labelColor) -> NSImage {
-        let mascot = mascotImage(pose: pose)
+    static func image(rows: [BarRow], pose: Pose, mood: Mood = .calm, textColor: NSColor = .labelColor) -> NSImage {
+        let mascot = mascotImage(pose: pose, mood: mood)
         let cols = columns(rows)
         // Aligned columns need the widest entry of each column; in rare combinations that is wider than
         // the plain runs. Never take more menu bar room than the plain layout would.
