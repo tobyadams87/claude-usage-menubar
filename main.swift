@@ -172,12 +172,12 @@ final class App: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigation
         for i in [weeklyItem, weeklyBarItem, weeklyProjItem, resetItem, sessionItem, sessionBarItem, sessionProjItem] {
             i.isEnabled = false; menu.addItem(i)
         }
-        weeklyBarItem.isHidden = true
-        sessionBarItem.isHidden = true
-        weeklyProjItem.isHidden = true
-        sessionProjItem.isHidden = true
-        weeklyBarItem.isHidden = true
-        sessionBarItem.isHidden = true
+        weeklyBarItem.setHidden(true)
+        sessionBarItem.setHidden(true)
+        weeklyProjItem.setHidden(true)
+        sessionProjItem.setHidden(true)
+        weeklyBarItem.setHidden(true)
+        sessionBarItem.setHidden(true)
         menu.addItem(.separator())
         updatedItem.isEnabled = false; menu.addItem(updatedItem)
         let worst = NSTextField(labelWithString: "Update failed 59m ago · next in 4m 59s")
@@ -506,33 +506,36 @@ final class App: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigation
         mood = .calm
         setPlain("Sign in")
         weeklyItem.title = "Not signed in"
-        resetItem.isHidden = true
-        sessionItem.isHidden = true
-        weeklyProjItem.isHidden = true
-        sessionProjItem.isHidden = true
-        weeklyBarItem.isHidden = true
-        sessionBarItem.isHidden = true
+        resetItem.setHidden(true)
+        sessionItem.setHidden(true)
+        weeklyProjItem.setHidden(true)
+        sessionProjItem.setHidden(true)
+        weeklyBarItem.setHidden(true)
+        sessionBarItem.setHidden(true)
         updateAuthItems()
     }
 
     func updateUpdatedItem() {
-        guard let t = lastAttempt, !cookies.isEmpty else { updatedItem.isHidden = true; return }
-        updatedItem.isHidden = false
+        guard let t = lastAttempt, !cookies.isEmpty else { updatedItem.setHidden(true); return }
+        updatedItem.setHidden(false)
         let ago = Date().timeIntervalSince(t)
         let next = (timer?.fireDate ?? Date()).timeIntervalSinceNow
         let agoText = ago < 5 ? "just now" : ago < 60 ? "\(Int(ago))s ago" : "\(Self.countdown(ago)) ago"
         let nextText = next < 60 ? "\(max(1, Int(next.rounded())))s" : Self.countdown(next)
-        let text = (lastOK ? "Updated " : "Update failed ") + agoText + " · next in " + nextText
+        // Refreshing every few seconds: "ago" is always about the same, so just say so and count down.
+        let text = interval < 60
+            ? (lastOK ? "Updated just now" : "Update failed") + " · next in " + nextText
+            : (lastOK ? "Updated " : "Update failed ") + agoText + " · next in " + nextText
         updatedItem.title = text
         updatedLabel.stringValue = text
     }
 
     func updateAuthItems() {
-        signInItem.isHidden = !cookies.isEmpty
-        keyItem.isHidden = !cookies.isEmpty
-        signOutItem.isHidden = cookies.isEmpty
-        refreshItem.isHidden = cookies.isEmpty
-        refreshRateItem.isHidden = cookies.isEmpty
+        signInItem.setHidden(!cookies.isEmpty)
+        keyItem.setHidden(!cookies.isEmpty)
+        signOutItem.setHidden(cookies.isEmpty)
+        refreshItem.setHidden(cookies.isEmpty)
+        refreshRateItem.setHidden(cookies.isEmpty)
     }
 
     // MARK: Fetching
@@ -675,13 +678,13 @@ final class App: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigation
             // Keep the last known value in the bar if we have one; just explain in the menu.
             if last == nil { setPlain("!") }
             weeklyItem.title = e.message
-            resetItem.isHidden = true
-            sessionItem.isHidden = true
-            weeklyProjItem.isHidden = true
-            sessionProjItem.isHidden = true
-            weeklyBarItem.isHidden = true
-            sessionBarItem.isHidden = true
-            if case .unauthorized = e { signInItem.isHidden = false }
+            resetItem.setHidden(true)
+            sessionItem.setHidden(true)
+            weeklyProjItem.setHidden(true)
+            sessionProjItem.setHidden(true)
+            weeklyBarItem.setHidden(true)
+            sessionBarItem.setHidden(true)
+            if case .unauthorized = e { signInItem.setHidden(false) }
         }
     }
 
@@ -745,6 +748,9 @@ final class App: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigation
             v.autoresizingMask = []
             v.setFrameSize(NSSize(width: menuWidth, height: v.frame.height))
         }
+        // The menu is sometimes laid out ~18pt wider than its views on first open (room for a checkmark
+        // column); a floor at that width keeps it identical before and after the first refresh.
+        menu.minimumWidth = menuWidth + 18.5
     }
 
     func render() {
@@ -773,30 +779,30 @@ final class App: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigation
         var w = "Weekly: \(Int(u.weekly.rounded()))% used"
         if let r = u.weeklyReset, r > now { w += " · resets in \(Self.countdown(r.timeIntervalSince(now))) (\(Self.fmt(r)))" }
         setMain(weeklyItem, w)
-        resetItem.isHidden = true
+        resetItem.setHidden(true)
         if let s = u.session {
             var t = "5-hour: \(Int(s.rounded()))% used"
             if let r = u.sessionReset, r > now { t += " · resets in \(Self.countdown(r.timeIntervalSince(now))) (\(Self.timeFmt.string(from: r)))" }
             setMain(sessionItem, t)
-            sessionItem.isHidden = false
-        } else { sessionItem.isHidden = true }
+            sessionItem.setHidden(false)
+        } else { sessionItem.setHidden(true) }
 
         // Usage bars (blue normally; yellow/orange/red at the same thresholds as the menu bar)
         weeklyBar.fraction = u.weekly / 100
         weeklyBar.fillColor = Self.color(for: u.weekly) ?? .systemBlue
-        weeklyBarItem.isHidden = false
+        weeklyBarItem.setHidden(false)
         if let s = u.session {
             sessionBar.fraction = s / 100
             sessionBar.fillColor = Self.color(for: s) ?? .systemBlue
-            sessionBarItem.isHidden = false
-        } else { sessionBarItem.isHidden = true }
+            sessionBarItem.setHidden(false)
+        } else { sessionBarItem.setHidden(true) }
 
         // "At this pace..." predictions (same idea as the Claude app's usage page)
         setProjection(weeklyProjItem, wp.weeklyText(resetsAt: u.weeklyReset, now: now), warn: wp.runsOutSoon)
         if let s = u.session {
             let sp = Projection.make(utilization: s, resetsAt: u.sessionReset, window: 5 * 3600, now: now)
             setProjection(sessionProjItem, sp.sessionText(resetsAt: u.sessionReset, now: now), warn: sp.runsOutSoon)
-        } else { sessionProjItem.isHidden = true }
+        } else { sessionProjItem.setHidden(true) }
     }
 
     // Info lines are custom views rather than plain menu items: macOS dims disabled items (which would
@@ -816,6 +822,7 @@ final class App: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigation
 
     // The facts (usage, limit, reset time): bold and full strength.
     func setMain(_ item: NSMenuItem, _ text: String) {
+        if item.title == text && item.view != nil { return }     // unchanged: leave the open menu's highlight alone
         item.title = text
         item.view = infoView(NSAttributedString(string: text, attributes: [
             .font: NSFont.systemFont(ofSize: 13, weight: .semibold),
@@ -824,8 +831,10 @@ final class App: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigation
 
     // The forecast: smaller and lighter, so it reads as secondary to the line above it.
     func setProjection(_ item: NSMenuItem, _ text: String?, warn: Bool) {
-        guard let text else { item.isHidden = true; return }
-        item.isHidden = false
+        guard let text else { item.setHidden(true); return }
+        item.setHidden(false)
+        if item.title == text && item.view != nil && item.representedObject as? Bool == warn { return }
+        item.representedObject = warn
         item.title = text
         item.view = infoView(NSAttributedString(string: text, attributes: [
             .font: NSFont.systemFont(ofSize: 11, weight: .regular),
@@ -884,3 +893,9 @@ app.setActivationPolicy(.accessory)
 let delegate = App()
 app.delegate = delegate
 app.run()
+
+
+extension NSMenuItem {
+    // Setting isHidden makes an open menu rebuild and drop the highlight, so only touch it on a real change.
+    func setHidden(_ h: Bool) { if isHidden != h { isHidden = h } }
+}
