@@ -66,6 +66,14 @@ final class HistoryChartView: NSView {
         for (pct, text) in [(0.0, "0%"), (50, "50%"), (100, "100%")] {
             let l = label(text); l.draw(at: NSPoint(x: plot.minX - 2 - l.size().width, y: y(pct) - l.size().height / 2))
         }
+        // Gridlines: baseline, a faint 50% line, and a firmer line at 100%, the limit.
+        NSColor.labelColor.withAlphaComponent(0.16).setFill()
+        NSRect(x: plot.minX, y: plot.minY, width: plot.width, height: 1).fill()
+        NSColor.labelColor.withAlphaComponent(0.07).setFill()
+        NSRect(x: plot.minX, y: y(50), width: plot.width, height: 1).fill()
+        NSColor.labelColor.withAlphaComponent(0.22).setFill()
+        NSRect(x: plot.minX, y: y(100) - 1, width: plot.width, height: 1).fill()
+
         // X axis: a label at the start of each day (or each hour, for the 5-hour chart), and where the window resets.
         let fmt = DateFormatter(); fmt.dateFormat = isSession ? "HH:mm" : "EEE"
         let rs = label("reset", size: 8.5); rs.draw(at: NSPoint(x: plot.maxX - rs.size().width, y: 8))
@@ -133,6 +141,15 @@ final class HistoryChartView: NSView {
             dash.move(to: now); dash.line(to: end)
             (warn ? NSColor.systemOrange : NSColor.secondaryLabelColor).setStroke()
             dash.stroke()
+            // Out of allowance before the reset: the locked-out stretch runs along the limit, in red.
+            if forecastRunsOut != nil, end.x < plot.maxX - 1 {
+                let lock = NSBezierPath()
+                lock.lineWidth = 1.5; lock.lineCapStyle = .round
+                lock.setLineDash([1.5, 3.5], count: 2, phase: 0)
+                lock.move(to: end); lock.line(to: NSPoint(x: plot.maxX, y: end.y))
+                NSColor.systemRed.setStroke()
+                lock.stroke()
+            }
         }
         // "N% now": above-left of the dot (clear of both the rising line and the forecast), or below-right
         // when the dot is too close to the top.
