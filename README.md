@@ -15,7 +15,8 @@ A tiny macOS menu bar app that shows your **Claude weekly and 5-hour usage limit
 - The mascot changes color with your weekly pace (calm, amber, or red) and blinks, shuffles and waves now and then (click it for a reaction)
 - About checks GitHub for a newer release (only when you open it) and offers a download button if there is one
 - Native Swift, a single ~150 KB binary, no dependencies. It polls every 5 minutes by default and is idle otherwise.
-- A **Refresh Every** menu lets you poll faster (from every 5 seconds up to 5 minutes) when you're burning through tokens. It backs off after failures and slows itself down if claude.ai rate-limits.
+- A **Refresh Every** menu lets you poll faster (from every 5 seconds up to 5 minutes) when you're burning through tokens, or pick **Auto**: it checks every 15 seconds while your usage is moving and eases off when it stops. It pauses while your Mac sleeps or is locked, backs off after failures and slows itself down if claude.ai rate-limits.
+- A small **chart of your week so far** sits under the weekly bar, with the "at this pace" forecast dotted through to the reset. The readings are kept in a local file (the last 8 days) and never leave your Mac.
 
 <p align="center"><img src="menubar-states.png" width="720" alt="The menu bar item in its yellow, orange and red warning states"></p>
 
@@ -68,6 +69,7 @@ This is an unofficial community project. It is not affiliated with, endorsed by,
 | `MenuBarArt.swift` | Draws the menu bar item (mascot and aligned rows) |
 | `UpdateChecker.swift` | Checks GitHub for a newer release (About window) |
 | `UsageBarView.swift` | The usage bars in the dropdown |
+| `History.swift` | Local usage log and the weekly chart |
 | `Projection.swift` | The "at this pace you'll run out..." prediction |
 | `makeicon.swift` | Generates the app icon from the pixel mascot |
 | `build.sh` | Builds and ad-hoc signs `ClaudeUsage.app` |

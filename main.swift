@@ -68,7 +68,7 @@ enum Store {
 
 // Newest first. Keep the top entry in sync with CFBundleShortVersionString in build.sh.
 let changelog: [(version: String, notes: [String])] = [
-    ("1.4.0", ["The mascot now shows your weekly pace: terracotta normally, amber if you are on track to run out 12+ hours before the reset, red at 36+ hours", "Based on how long you would be locked out, so using it all up near the end of the week stays calm", "New Refresh Every menu: choose 5 or 10 seconds, 30 seconds, 1, 2 or 5 minutes (default 5); backs off after failures and slows itself down if claude.ai rate-limits"]),
+    ("1.4.0", ["The mascot now shows your weekly pace: terracotta normally, amber if you are on track to run out 12+ hours before the reset, red at 36+ hours", "Based on how long you would be locked out, so using it all up near the end of the week stays calm", "New Refresh Every menu: choose 5 or 10 seconds, 30 seconds, 1, 2 or 5 minutes (default 5), or Auto, which polls quickly while your usage is moving and eases off when it stops; backs off after failures and slows itself down if claude.ai rate-limits", "Polling pauses while the Mac sleeps, the screen is off or locked", "The dropdown charts your week so far, with the forecast dotted to the reset (history is kept locally for 8 days)"]),
     ("1.3.0", ["Dropdown shows a usage bar under the weekly and 5-hour limits, like the Claude usage page", "Bars turn yellow, orange and red at the same 60/80/90% points as the menu bar", "Shorter prediction wording, so the dropdown stays narrow"]),
     ("1.2.0", ["About checks GitHub for a newer release and offers a download button when there is one", "Only checks when you open About; nothing runs in the background"]),
     ("1.1.1", ["About window: roomier layout, and a link to the GitHub repo", "App icon: removed faint seams between the mascot's pixels"]),
@@ -118,12 +118,21 @@ final class App: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigation
 
     // How often to ask claude.ai for fresh numbers. Chosen from the "Refresh Every" submenu and remembered.
     static let pollChoices: [(title: String, seconds: TimeInterval)] = [
-        ("5 seconds", 5), ("10 seconds", 10), ("30 seconds", 30), ("1 minute", 60), ("2 minutes", 120), ("5 minutes (default)", 300)]
+        ("Auto (faster while you're working)", 0), ("5 seconds", 5), ("10 seconds", 10), ("30 seconds", 30), ("1 minute", 60), ("2 minutes", 120), ("5 minutes (default)", 300)]
     static let defaultInterval: TimeInterval = 300
-    var interval: TimeInterval = {
-        let saved = UserDefaults.standard.double(forKey: "pollInterval")
-        return App.pollChoices.contains { $0.seconds == saved } ? saved : App.defaultInterval
+    var interval: TimeInterval = {      // 0 = Auto
+        guard let saved = UserDefaults.standard.object(forKey: "pollInterval") as? Double,
+              App.pollChoices.contains(where: { $0.seconds == saved }) else { return App.defaultInterval }
+        return saved
     }()
+    var autoMode: Bool { interval == 0 }
+    var baseInterval: TimeInterval { autoMode ? App.defaultInterval : interval }
+    var lastChange: Date?                 // when the usage numbers last moved (drives Auto)
+    var currentWait: TimeInterval = 300   // how long the current countdown is
+    var paused = false                    // asleep, screen off or locked: no polling
+    let history = History()
+    let chart = HistoryChartView(frame: NSRect(x: 0, y: 0, width: 300, height: HistoryChartView.height))
+    let chartItem = NSMenuItem(title: "", action: nil, keyEquivalent: "")
     var failures = 0            // consecutive failed refreshes, for backing off
     var timer: Timer?
     let refreshRateItem = NSMenuItem(title: "Refresh Every", action: nil, keyEquivalent: "")
@@ -169,15 +178,16 @@ final class App: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigation
         for bar in [weeklyBar, sessionBar] { bar.autoresizingMask = [.width] }
         weeklyBarItem.view = weeklyBar
         sessionBarItem.view = sessionBar
-        for i in [weeklyItem, weeklyBarItem, weeklyProjItem, resetItem, sessionItem, sessionBarItem, sessionProjItem] {
+        chart.autoresizingMask = []
+        chartItem.view = chart
+        for i in [weeklyItem, weeklyBarItem, weeklyProjItem, chartItem, resetItem, sessionItem, sessionBarItem, sessionProjItem] {
             i.isEnabled = false; menu.addItem(i)
         }
         weeklyBarItem.setHidden(true)
         sessionBarItem.setHidden(true)
         weeklyProjItem.setHidden(true)
         sessionProjItem.setHidden(true)
-        weeklyBarItem.setHidden(true)
-        sessionBarItem.setHidden(true)
+        chartItem.setHidden(true)
         menu.addItem(.separator())
         updatedItem.isEnabled = false; menu.addItem(updatedItem)
         let worst = NSTextField(labelWithString: "Update failed 59m ago · next in 4m 59s")
@@ -197,6 +207,7 @@ final class App: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigation
         item.menu = menu
 
         cookies = Store.load()
+        watchPower()
         scheduleIdle()
         startPolling()
         // Cheap local re-render (no network) so the countdown stays current.
@@ -512,6 +523,7 @@ final class App: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigation
         sessionProjItem.setHidden(true)
         weeklyBarItem.setHidden(true)
         sessionBarItem.setHidden(true)
+        chartItem.setHidden(true)
         updateAuthItems()
     }
 
@@ -523,7 +535,7 @@ final class App: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigation
         let agoText = ago < 5 ? "just now" : ago < 60 ? "\(Int(ago))s ago" : "\(Self.countdown(ago)) ago"
         let nextText = next < 60 ? "\(max(1, Int(next.rounded())))s" : Self.countdown(next)
         // Refreshing every few seconds: "ago" is always about the same, so just say so and count down.
-        let text = interval < 60
+        let text = currentWait < 60
             ? (lastOK ? "Updated just now" : "Update failed") + " · next in " + nextText
             : (lastOK ? "Updated " : "Update failed ") + agoText + " · next in " + nextText
         updatedItem.title = text
@@ -562,6 +574,29 @@ final class App: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigation
 
     // MARK: Polling interval
 
+    // No point polling while the Mac is asleep, the screen is off or the session is locked: stop the
+    // timer, then fetch straight away when you're back.
+    func watchPower() {
+        let ws = NSWorkspace.shared.notificationCenter
+        for n in [NSWorkspace.willSleepNotification, NSWorkspace.screensDidSleepNotification] {
+            ws.addObserver(forName: n, object: nil, queue: .main) { [weak self] _ in self?.setPaused(true) }
+        }
+        for n in [NSWorkspace.didWakeNotification, NSWorkspace.screensDidWakeNotification] {
+            ws.addObserver(forName: n, object: nil, queue: .main) { [weak self] _ in self?.setPaused(false) }
+        }
+        let dc = DistributedNotificationCenter.default()
+        dc.addObserver(forName: .init("com.apple.screenIsLocked"), object: nil, queue: .main) { [weak self] _ in self?.setPaused(true) }
+        dc.addObserver(forName: .init("com.apple.screenIsUnlocked"), object: nil, queue: .main) { [weak self] _ in self?.setPaused(false) }
+    }
+
+    func setPaused(_ p: Bool) {
+        guard p != paused else { return }
+        paused = p
+        if p { timer?.fireDate = .distantFuture; return }
+        timer?.fireDate = Date().addingTimeInterval(baseInterval)    // safety net; a fetch resets it
+        refresh()
+    }
+
     func makeRateMenu() -> NSMenu {
         let m = NSMenu()
         for (title, seconds) in Self.pollChoices {
@@ -580,10 +615,10 @@ final class App: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigation
 
     func startPolling() {
         timer?.invalidate()
-        let t = Timer(timeInterval: interval, repeats: true) { [weak self] _ in self?.refresh() }
+        let t = Timer(timeInterval: baseInterval, repeats: true) { [weak self] _ in self?.refresh() }
         RunLoop.main.add(t, forMode: .common)
         timer = t
-        timer?.tolerance = min(interval * 0.2, 60)      // a little slack lets macOS batch wakeups
+        timer?.tolerance = min(baseInterval * 0.2, 60)      // a little slack lets macOS batch wakeups
     }
 
     @objc func pickInterval(_ sender: NSMenuItem) {
@@ -595,6 +630,8 @@ final class App: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigation
     func setInterval(_ seconds: TimeInterval) {
         interval = seconds
         failures = 0
+        lastChange = nil
+        currentWait = baseInterval
         UserDefaults.standard.set(seconds, forKey: "pollInterval")
         refreshRateItem.submenu?.items.forEach { if let s = $0.representedObject as? TimeInterval { $0.state = s == seconds ? .on : .off } }
         startPolling()
@@ -612,10 +649,21 @@ final class App: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigation
             self.lastAttempt = Date()
             if case .success = r { self.lastOK = true } else { self.lastOK = false }
             if case .success = r { self.failures = 0 } else { self.failures += 1 }
-            if case .failure(.rateLimited) = r, self.interval < 60 { self.setInterval(60) }   // protect the session
-            // Next poll counts from this fetch. After failures, wait longer each time (capped at 5 minutes).
-            let wait = self.failures == 0 ? self.interval : min(self.interval * pow(2, Double(self.failures)), max(self.interval, 300))
-            self.timer?.fireDate = Date().addingTimeInterval(wait)
+            if case .failure(.rateLimited) = r, self.interval > 0, self.interval < 60 { self.setInterval(60) }   // protect the session
+            if case .success(let u) = r {
+                if let o = self.last, o.weekly != u.weekly || o.session != u.session { self.lastChange = Date() }
+                self.history.record(weekly: u.weekly, session: u.session)
+            }
+            // Next poll counts from this fetch. Auto polls quickly while the numbers are moving and eases off
+            // when they stop; after failures, wait longer each time (capped at 5 minutes).
+            var pace = self.interval
+            if self.autoMode {
+                let idle = self.lastChange.map { Date().timeIntervalSince($0) } ?? .infinity
+                pace = idle < 120 ? 15 : idle < 600 ? 60 : 300
+            }
+            let wait = self.failures == 0 ? pace : min(pace * pow(2, Double(self.failures)), max(pace, 300))
+            self.currentWait = wait
+            self.timer?.fireDate = self.paused ? .distantFuture : Date().addingTimeInterval(wait)
             self.display(r)
             if case .success = r { completion?(true) } else { completion?(false) }
         }
@@ -684,6 +732,7 @@ final class App: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigation
             sessionProjItem.setHidden(true)
             weeklyBarItem.setHidden(true)
             sessionBarItem.setHidden(true)
+            chartItem.setHidden(true)
             if case .unauthorized = e { signInItem.setHidden(false) }
         }
     }
@@ -742,7 +791,7 @@ final class App: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigation
     // doesn't go wider and narrower as the text changes between refreshes.
     var menuWidth: CGFloat = 0
     func lockMenuWidth() {
-        let views = menu.items.compactMap { $0.view }.filter { !($0 is UsageBarView) && $0 !== updatedView }
+        let views = menu.items.compactMap { $0.view }.filter { !($0 is UsageBarView) && !($0 is HistoryChartView) && $0 !== updatedView }
         menuWidth = max(menuWidth, views.map { $0.frame.width }.max() ?? 0)
         for v in menu.items.compactMap({ $0.view }) {
             v.autoresizingMask = []
@@ -803,6 +852,21 @@ final class App: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigation
             let sp = Projection.make(utilization: s, resetsAt: u.sessionReset, window: 5 * 3600, now: now)
             setProjection(sessionProjItem, sp.sessionText(resetsAt: u.sessionReset, now: now), warn: sp.runsOutSoon)
         } else { sessionProjItem.setHidden(true) }
+
+        // The week so far, with the forecast dotted to the reset.
+        if let reset = u.weeklyReset {
+            let start = reset.addingTimeInterval(-7 * 86400)
+            let pts = history.samples(since: start)
+            chart.windowStart = start; chart.windowEnd = reset
+            chart.warn = wp.runsOutSoon
+            switch wp {
+            case .onPace(let p): chart.forecast = p; chart.forecastRunsOut = nil
+            case .runsOut(let d): chart.forecast = nil; chart.forecastRunsOut = d
+            case .none: chart.forecast = nil; chart.forecastRunsOut = nil
+            }
+            chart.points = pts
+            chartItem.setHidden(pts.count < 2)
+        } else { chartItem.setHidden(true) }
     }
 
     // Info lines are custom views rather than plain menu items: macOS dims disabled items (which would

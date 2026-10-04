@@ -5,7 +5,7 @@ cd "$(dirname "$0")"
 APP=ClaudeUsage.app
 rm -rf $APP
 mkdir -p $APP/Contents/MacOS $APP/Contents/Resources
-swiftc -O main.swift MenuBarArt.swift Projection.swift UpdateChecker.swift UsageBarView.swift -o $APP/Contents/MacOS/ClaudeUsage
+swiftc -O main.swift MenuBarArt.swift Projection.swift UpdateChecker.swift UsageBarView.swift History.swift -o $APP/Contents/MacOS/ClaudeUsage
 # App icon (generated from the pixel mascot)
 ICONSET=$(mktemp -d)/ClaudeUsage.iconset
 swiftc -O makeicon.swift -o "$(dirname "$ICONSET")/makeicon"
