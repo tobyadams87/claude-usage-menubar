@@ -44,6 +44,8 @@ Move `ClaudeUsage.app` to `/Applications` and tick **Launch at Login** in its me
 
 If you download a prebuilt zip instead, the app is only ad-hoc signed: right-click it and choose **Open** the first time.
 
+macOS may also ask for your Mac password to let the app read its saved claude.ai sign-in from your Keychain. Click **Always Allow**. Because the app is ad-hoc signed, macOS treats each new version (or rebuild) as a different app, so expect to see this once after every update.
+
 ## First launch
 
 A small window opens at claude.ai. Sign in the normal way (Google, email code, SSO). If Google refuses to sign in inside the app, use **Sign In with Session Key…** in the menu and paste the `sessionKey` cookie from a browser where you're signed in to claude.ai.
