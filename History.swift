@@ -34,6 +34,7 @@ final class History {
 // The week so far: usage climbing from the left, with the "at this pace" forecast dotted to the reset.
 final class HistoryChartView: NSView {
     static let height: CGFloat = 98
+    static let rightMargin: CGFloat = 28     // mirrors the % labels on the left; holds the end of the 'reset' label
 
     var title = "Usage this week"
     var isSession = false            // 5-hour chart: hourly labels instead of day names
@@ -46,7 +47,7 @@ final class HistoryChartView: NSView {
 
     override func draw(_ dirtyRect: NSRect) {
         let plot = NSRect(x: UsageBarView.leftInset, y: 24,
-                          width: max(0, bounds.width - UsageBarView.leftInset - UsageBarView.rightInset),
+                          width: max(0, bounds.width - UsageBarView.leftInset - UsageBarView.rightInset - Self.rightMargin),
                           height: bounds.height - 24 - 28)
         guard plot.width > 20, windowEnd > windowStart else { return }
         let span = windowEnd.timeIntervalSince(windowStart)
@@ -67,7 +68,8 @@ final class HistoryChartView: NSView {
         }
         // X axis: a label at the start of each day (or each hour, for the 5-hour chart), and where the window resets.
         let fmt = DateFormatter(); fmt.dateFormat = isSession ? "HH:mm" : "EEE"
-        let rs = label("reset"); rs.draw(at: NSPoint(x: plot.maxX - rs.size().width, y: 8))
+        let rs = label("reset"); rs.draw(at: NSPoint(x: plot.maxX - rs.size().width / 2, y: 8))
+        let resetLeft = plot.maxX - rs.size().width / 2 - 4
         var ticks: [(CGFloat, String)] = []
         if isSession {
             let cal = Calendar.current
@@ -81,7 +83,7 @@ final class HistoryChartView: NSView {
             NSRect(x: tx, y: plot.minY, width: 1, height: 3).fill()
             let l = label(text)
             let x0 = isSession ? tx - l.size().width / 2 : tx + 2
-            if x0 + l.size().width + 16 < plot.maxX - rs.size().width, x0 >= plot.minX - 2 { l.draw(at: NSPoint(x: x0, y: 8)) }
+            if x0 + l.size().width < resetLeft, x0 >= plot.minX - 14 { l.draw(at: NSPoint(x: x0, y: 8)) }
         }
 
         guard let first = points.first, let last = points.last else { return }
