@@ -16,13 +16,14 @@ struct Usage {
 }
 
 enum UsageError: Error {
-    case signedOut, unauthorized, network, parse
+    case signedOut, unauthorized, network, parse, rateLimited
     var message: String {
         switch self {
         case .signedOut: return "Not signed in"
         case .unauthorized: return "Session expired — sign in again"
         case .network: return "Can't reach claude.ai"
         case .parse: return "Unexpected response"
+        case .rateLimited: return "Rate limited by claude.ai: slowed refresh to 1 minute"
         }
     }
 }
@@ -67,7 +68,7 @@ enum Store {
 
 // Newest first. Keep the top entry in sync with CFBundleShortVersionString in build.sh.
 let changelog: [(version: String, notes: [String])] = [
-    ("1.4.0", ["The mascot now shows your weekly pace: terracotta normally, amber if you are on track to run out 12+ hours before the reset, red at 36+ hours", "Based on how long you would be locked out, so using it all up near the end of the week stays calm"]),
+    ("1.4.0", ["The mascot now shows your weekly pace: terracotta normally, amber if you are on track to run out 12+ hours before the reset, red at 36+ hours", "Based on how long you would be locked out, so using it all up near the end of the week stays calm", "New Refresh Every menu: choose 5 or 10 seconds, 30 seconds, 1, 2 or 5 minutes (default 5); backs off after failures and slows itself down if claude.ai rate-limits"]),
     ("1.3.0", ["Dropdown shows a usage bar under the weekly and 5-hour limits, like the Claude usage page", "Bars turn yellow, orange and red at the same 60/80/90% points as the menu bar", "Shorter prediction wording, so the dropdown stays narrow"]),
     ("1.2.0", ["About checks GitHub for a newer release and offers a download button when there is one", "Only checks when you open About; nothing runs in the background"]),
     ("1.1.1", ["About window: roomier layout, and a link to the GitHub repo", "App icon: removed faint seams between the mascot's pixels"]),
@@ -107,8 +108,17 @@ final class App: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigation
     let aboutItem = NSMenuItem(title: "About ClaudeUsage", action: #selector(showAbout), keyEquivalent: "")
     let loginItem = NSMenuItem(title: "Launch at Login", action: #selector(toggleLogin), keyEquivalent: "")
 
-    let interval: TimeInterval = 300
+    // How often to ask claude.ai for fresh numbers. Chosen from the "Refresh Every" submenu and remembered.
+    static let pollChoices: [(title: String, seconds: TimeInterval)] = [
+        ("5 seconds", 5), ("10 seconds", 10), ("30 seconds", 30), ("1 minute", 60), ("2 minutes", 120), ("5 minutes (default)", 300)]
+    static let defaultInterval: TimeInterval = 300
+    var interval: TimeInterval = {
+        let saved = UserDefaults.standard.double(forKey: "pollInterval")
+        return App.pollChoices.contains { $0.seconds == saved } ? saved : App.defaultInterval
+    }()
+    var failures = 0            // consecutive failed refreshes, for backing off
     var timer: Timer?
+    let refreshRateItem = NSMenuItem(title: "Refresh Every", action: nil, keyEquivalent: "")
     var cookies: [HTTPCookie] = []
     var orgID: String? = UserDefaults.standard.string(forKey: "orgID")
     var inFlight = false
@@ -163,15 +173,16 @@ final class App: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigation
         menu.addItem(.separator())
         updatedItem.isEnabled = false; menu.addItem(updatedItem)
         menu.addItem(.separator())
-        for i in [signInItem, keyItem, refreshItem, signOutItem, loginItem, aboutItem] { i.target = self; menu.addItem(i) }
+        for i in [signInItem, keyItem, refreshItem, refreshRateItem, signOutItem, loginItem, aboutItem] { i.target = self; menu.addItem(i) }
+        refreshRateItem.target = nil
+        refreshRateItem.submenu = makeRateMenu()
         menu.addItem(NSMenuItem(title: "Quit", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
         menu.delegate = self
         item.menu = menu
 
         cookies = Store.load()
         scheduleIdle()
-        timer = Timer.scheduledTimer(withTimeInterval: interval, repeats: true) { [weak self] _ in self?.refresh() }
-        timer?.tolerance = 60
+        startPolling()
         // Cheap local re-render (no network) so the countdown stays current.
         tick = Timer.scheduledTimer(withTimeInterval: 60, repeats: true) { [weak self] _ in self?.render() }
         tick?.tolerance = 10
@@ -480,8 +491,8 @@ final class App: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigation
         updatedItem.isHidden = false
         let ago = Date().timeIntervalSince(t)
         let next = (timer?.fireDate ?? Date()).timeIntervalSinceNow
-        let agoText = ago < 60 ? "just now" : "\(Self.countdown(ago)) ago"
-        let nextText = next < 60 ? "<1m" : Self.countdown(next)
+        let agoText = ago < 5 ? "just now" : ago < 60 ? "\(Int(ago))s ago" : "\(Self.countdown(ago)) ago"
+        let nextText = next < 60 ? "\(max(1, Int(next.rounded())))s" : Self.countdown(next)
         updatedItem.title = (lastOK ? "Updated " : "Update failed ") + agoText + " · next in " + nextText
     }
 
@@ -490,6 +501,7 @@ final class App: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigation
         keyItem.isHidden = !cookies.isEmpty
         signOutItem.isHidden = cookies.isEmpty
         refreshItem.isHidden = cookies.isEmpty
+        refreshRateItem.isHidden = cookies.isEmpty
     }
 
     // MARK: Fetching
@@ -506,11 +518,50 @@ final class App: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigation
         http.dataTask(with: req) { data, resp, err in
             let code = (resp as? HTTPURLResponse)?.statusCode ?? 0
             let r: Result<Data, UsageError>
-            if code == 401 || code == 403 { r = .failure(.unauthorized) }
+            if code == 429 { r = .failure(.rateLimited) }
+            else if code == 401 || code == 403 { r = .failure(.unauthorized) }
             else if let data, err == nil, (200..<300).contains(code) { r = .success(data) }
             else { r = .failure(.network) }
             DispatchQueue.main.async { done(r) }
         }.resume()
+    }
+
+    // MARK: Polling interval
+
+    func makeRateMenu() -> NSMenu {
+        let m = NSMenu()
+        for (title, seconds) in Self.pollChoices {
+            let i = NSMenuItem(title: title, action: #selector(pickInterval(_:)), keyEquivalent: "")
+            i.target = self
+            i.representedObject = seconds
+            i.state = seconds == interval ? .on : .off
+            m.addItem(i)
+        }
+        m.addItem(.separator())
+        let note = NSMenuItem(title: "Faster means more requests to claude.ai", action: nil, keyEquivalent: "")
+        note.isEnabled = false
+        m.addItem(note)
+        return m
+    }
+
+    func startPolling() {
+        timer?.invalidate()
+        timer = Timer.scheduledTimer(withTimeInterval: interval, repeats: true) { [weak self] _ in self?.refresh() }
+        timer?.tolerance = min(interval * 0.2, 60)      // a little slack lets macOS batch wakeups
+    }
+
+    @objc func pickInterval(_ sender: NSMenuItem) {
+        guard let seconds = sender.representedObject as? TimeInterval else { return }
+        setInterval(seconds)
+        refresh()                                        // fetch straight away at the new rhythm
+    }
+
+    func setInterval(_ seconds: TimeInterval) {
+        interval = seconds
+        failures = 0
+        UserDefaults.standard.set(seconds, forKey: "pollInterval")
+        refreshRateItem.submenu?.items.forEach { if let s = $0.representedObject as? TimeInterval { $0.state = s == seconds ? .on : .off } }
+        startPolling()
     }
 
     @objc func refresh() { doRefresh(nil) }
@@ -524,7 +575,11 @@ final class App: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigation
             self.inFlight = false
             self.lastAttempt = Date()
             if case .success = r { self.lastOK = true } else { self.lastOK = false }
-            self.timer?.fireDate = Date().addingTimeInterval(self.interval)   // next poll counts from this fetch
+            if case .success = r { self.failures = 0 } else { self.failures += 1 }
+            if case .failure(.rateLimited) = r, self.interval < 60 { self.setInterval(60) }   // protect the session
+            // Next poll counts from this fetch. After failures, wait longer each time (capped at 5 minutes).
+            let wait = self.failures == 0 ? self.interval : min(self.interval * pow(2, Double(self.failures)), max(self.interval, 300))
+            self.timer?.fireDate = Date().addingTimeInterval(wait)
             self.display(r)
             if case .success = r { completion?(true) } else { completion?(false) }
         }
