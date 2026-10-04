@@ -205,10 +205,23 @@ final class App: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigation
         NSApp.mainMenu = main
     }
 
+    // Timers only fire in the default run-loop mode, which pauses while a menu is open, so the live
+    // countdown (and a due refresh) use common modes.
+    var liveTick: Timer?
+
     func menuWillOpen(_ menu: NSMenu) {
         react()
         updateUpdatedItem()
+        liveTick?.invalidate()
+        let t = Timer(timeInterval: 1, repeats: true) { [weak self] _ in self?.updateUpdatedItem() }
+        RunLoop.main.add(t, forMode: .common)
+        liveTick = t
         loginItem.state = SMAppService.mainApp.status == .enabled ? .on : .off
+    }
+
+    func menuDidClose(_ menu: NSMenu) {
+        liveTick?.invalidate()
+        liveTick = nil
     }
 
     @objc func toggleLogin() {
@@ -546,7 +559,9 @@ final class App: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigation
 
     func startPolling() {
         timer?.invalidate()
-        timer = Timer.scheduledTimer(withTimeInterval: interval, repeats: true) { [weak self] _ in self?.refresh() }
+        let t = Timer(timeInterval: interval, repeats: true) { [weak self] _ in self?.refresh() }
+        RunLoop.main.add(t, forMode: .common)
+        timer = t
         timer?.tolerance = min(interval * 0.2, 60)      // a little slack lets macOS batch wakeups
     }
 
