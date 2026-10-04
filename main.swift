@@ -820,6 +820,18 @@ final class App: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigation
         else if let txt = plainText { setPlain(txt) }
     }
 
+    // The chart is always shown when it's switched on: the current reading is always its last point, and a
+    // fresh window with nothing in it yet starts as a flat line at 0%.
+    static func chartPoints(_ saved: [(t: TimeInterval, v: Double)], current: Double, start: Date, now: Date)
+        -> [(t: TimeInterval, v: Double)] {
+        var pts = saved
+        if pts.isEmpty && current == 0 { pts.append((start.timeIntervalSince1970, 0)) }
+        if pts.last.map({ now.timeIntervalSince1970 - $0.t > 1 || $0.v != current }) ?? true {
+            pts.append((now.timeIntervalSince1970, current))
+        }
+        return pts
+    }
+
     // Every custom view gets one shared width, never narrower than the widest seen so far, so the menu
     // doesn't go wider and narrower as the text changes between refreshes.
     var menuWidth: CGFloat = 0
@@ -890,7 +902,7 @@ final class App: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigation
         // The week so far, with the forecast dotted to the reset.
         if let reset = u.weeklyReset {
             let start = reset.addingTimeInterval(-7 * 86400)
-            let pts = history.samples(since: start)
+            let pts = Self.chartPoints(history.samples(since: start).map { ($0.t, $0.w) }, current: u.weekly, start: start, now: now)
             chart.windowStart = start; chart.windowEnd = reset
             chart.warn = wp.runsOutSoon
             switch wp {
@@ -898,14 +910,15 @@ final class App: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigation
             case .runsOut(let d): chart.forecast = nil; chart.forecastRunsOut = d
             case .none: chart.forecast = nil; chart.forecastRunsOut = nil
             }
-            chart.points = pts.map { ($0.t, $0.w) }
-            chartItem.setHidden(pts.count < 2 || !showWeeklyChart)
+            chart.points = pts
+            chartItem.setHidden(!showWeeklyChart)
         } else { chartItem.setHidden(true) }
 
         // The same for the 5-hour window.
         if let reset = u.sessionReset, u.session != nil {
             let start = reset.addingTimeInterval(-5 * 3600)
-            let pts = history.samples(since: start).compactMap { x in x.s.map { (t: x.t, v: $0) } }
+            let pts = Self.chartPoints(history.samples(since: start).compactMap { x in x.s.map { (t: x.t, v: $0) } },
+                                       current: u.session ?? 0, start: start, now: now)
             sessionChart.windowStart = start; sessionChart.windowEnd = reset
             let sp = Projection.make(utilization: u.session ?? 0, resetsAt: reset, window: 5 * 3600, now: now)
             sessionChart.warn = sp.runsOutSoon
@@ -915,7 +928,7 @@ final class App: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigation
             case .none: sessionChart.forecast = nil; sessionChart.forecastRunsOut = nil
             }
             sessionChart.points = pts
-            sessionChartItem.setHidden(pts.count < 2 || !showSessionChart)
+            sessionChartItem.setHidden(!showSessionChart)
         } else { sessionChartItem.setHidden(true) }
     }
 

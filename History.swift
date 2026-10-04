@@ -82,15 +82,15 @@ final class HistoryChartView: NSView {
             NSColor.labelColor.withAlphaComponent(0.16).setFill()
             NSRect(x: tx, y: plot.minY, width: 1, height: 3).fill()
             let l = label(text, size: 8.5)
-            let x0 = isSession ? tx - l.size().width / 2 : tx
+            let x0 = tx - l.size().width / 2          // centred on its notch, for days and hours alike
             if x0 + l.size().width < resetLeft, x0 >= plot.minX - 14 { l.draw(at: NSPoint(x: x0, y: 8)) }
         }
 
-        guard let first = points.first, let last = points.last else { return }
-        if last.t - first.t < (isSession ? 1.5 : 12) * 3600 {
-            let n = label("History fills in while the app runs", size: 10)
-            n.draw(at: NSPoint(x: plot.minX + 8, y: y(60)))
+        let span0 = (points.last?.t ?? 0) - (points.first?.t ?? 0)
+        if span0 < (isSession ? 1.5 : 12) * 3600 {
+            label("History fills in while the app runs", size: 10).draw(at: NSPoint(x: plot.minX + 8, y: y(60)))
         }
+        guard let first = points.first, let last = points.last else { return }
         let line = NSColor.systemBlue
         let area = NSBezierPath()
         area.move(to: NSPoint(x: x(first.t), y: plot.minY))
