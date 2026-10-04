@@ -103,6 +103,14 @@ final class App: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigation
     let signInItem = NSMenuItem(title: "Sign In…", action: #selector(showLogin), keyEquivalent: "")
     let signOutItem = NSMenuItem(title: "Sign Out", action: #selector(signOut), keyEquivalent: "")
     let updatedItem = NSMenuItem(title: "", action: nil, keyEquivalent: "")
+    // Fixed-width custom view, so the menu doesn't breathe wider and narrower as the countdown text changes.
+    let updatedView = NSView()
+    let updatedLabel: NSTextField = {
+        let l = NSTextField(labelWithString: "")
+        l.font = .menuFont(ofSize: 0)
+        l.textColor = .secondaryLabelColor
+        return l
+    }()
     let keyItem = NSMenuItem(title: "Sign In with Session Key…", action: #selector(promptSessionKey), keyEquivalent: "")
     let refreshItem = NSMenuItem(title: "Refresh", action: #selector(refresh), keyEquivalent: "r")
     let aboutItem = NSMenuItem(title: "About ClaudeUsage", action: #selector(showAbout), keyEquivalent: "")
@@ -172,6 +180,14 @@ final class App: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigation
         sessionBarItem.isHidden = true
         menu.addItem(.separator())
         updatedItem.isEnabled = false; menu.addItem(updatedItem)
+        let worst = NSTextField(labelWithString: "Update failed 59m ago · next in 4m 59s")
+        worst.font = updatedLabel.font
+        let w = Self.infoInset + ceil(worst.fittingSize.width) + 16
+        let uv = updatedView
+        uv.setFrameSize(NSSize(width: w, height: 22))
+        updatedLabel.frame = NSRect(x: Self.infoInset, y: 2, width: w - Self.infoInset - 8, height: 18)
+        uv.addSubview(updatedLabel)
+        updatedItem.view = uv
         menu.addItem(.separator())
         for i in [signInItem, keyItem, refreshItem, refreshRateItem, signOutItem, loginItem, aboutItem] { i.target = self; menu.addItem(i) }
         refreshRateItem.target = nil
@@ -506,7 +522,9 @@ final class App: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigation
         let next = (timer?.fireDate ?? Date()).timeIntervalSinceNow
         let agoText = ago < 5 ? "just now" : ago < 60 ? "\(Int(ago))s ago" : "\(Self.countdown(ago)) ago"
         let nextText = next < 60 ? "\(max(1, Int(next.rounded())))s" : Self.countdown(next)
-        updatedItem.title = (lastOK ? "Updated " : "Update failed ") + agoText + " · next in " + nextText
+        let text = (lastOK ? "Updated " : "Update failed ") + agoText + " · next in " + nextText
+        updatedItem.title = text
+        updatedLabel.stringValue = text
     }
 
     func updateAuthItems() {
@@ -717,7 +735,20 @@ final class App: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigation
         else if let txt = plainText { setPlain(txt) }
     }
 
+    // Every custom view gets one shared width, never narrower than the widest seen so far, so the menu
+    // doesn't go wider and narrower as the text changes between refreshes.
+    var menuWidth: CGFloat = 0
+    func lockMenuWidth() {
+        let views = menu.items.compactMap { $0.view }.filter { !($0 is UsageBarView) && $0 !== updatedView }
+        menuWidth = max(menuWidth, views.map { $0.frame.width }.max() ?? 0)
+        for v in menu.items.compactMap({ $0.view }) {
+            v.autoresizingMask = []
+            v.setFrameSize(NSSize(width: menuWidth, height: v.frame.height))
+        }
+    }
+
     func render() {
+        defer { lockMenuWidth() }
         guard let u = last else { return }
         let now = Date()
         // Reset time has passed: numbers are stale, fetch fresh ones.
