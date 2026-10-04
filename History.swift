@@ -34,6 +34,7 @@ final class History {
 // The week so far: usage climbing from the left, with the "at this pace" forecast dotted to the reset.
 final class HistoryChartView: NSView {
     static let height: CGFloat = 98
+    static let plotLeft: CGFloat = 30          // room on the left for the 0% / 50% / 100% labels
     static let rightPad: CGFloat = 3.5       // the chart runs nearly to the edge of the menu
 
     var title = "Usage this week"
@@ -46,8 +47,8 @@ final class HistoryChartView: NSView {
     var warn = false
 
     override func draw(_ dirtyRect: NSRect) {
-        let plot = NSRect(x: UsageBarView.leftInset, y: 24,
-                          width: max(0, bounds.width - UsageBarView.leftInset - Self.rightPad),
+        let plot = NSRect(x: Self.plotLeft, y: 24,
+                          width: max(0, bounds.width - Self.plotLeft - Self.rightPad),
                           height: bounds.height - 24 - 28)
         guard plot.width > 20, windowEnd > windowStart else { return }
         let span = windowEnd.timeIntervalSince(windowStart)
@@ -61,7 +62,7 @@ final class HistoryChartView: NSView {
         }
 
         // Title and key, so it reads without explanation.
-        label(title, size: 10).draw(at: NSPoint(x: plot.minX, y: bounds.height - 21))
+        label(title, size: 10).draw(at: NSPoint(x: Self.rightPad, y: bounds.height - 21))
         // Y axis
         for (pct, text) in [(0.0, "0%"), (50, "50%"), (100, "100%")] {
             let l = label(text); l.draw(at: NSPoint(x: plot.minX - 2 - l.size().width, y: y(pct) - l.size().height / 2))

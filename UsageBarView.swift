@@ -3,8 +3,8 @@ import AppKit
 // A slim usage bar for the dropdown, like the ones on the Claude usage page:
 // a rounded track with a fill from the left. Drawn as a custom view so macOS doesn't dim it.
 final class UsageBarView: NSView {
-    static let leftInset: CGFloat = 30     // lines up with the text (labels have a ~2pt inner margin)
-    static let rightInset: CGFloat = 16
+    static let leftInset: CGFloat = 14      // lines up with the text above it
+    static let rightInset: CGFloat = 14
     static let barHeight: CGFloat = 6
 
     var fraction: Double = 0 { didSet { needsDisplay = true } }      // 0...1

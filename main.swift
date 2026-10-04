@@ -189,9 +189,9 @@ final class App: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigation
         for bar in [weeklyBar, sessionBar] { bar.autoresizingMask = [.width] }
         weeklyBarItem.view = weeklyBar
         sessionBarItem.view = sessionBar
-        chart.autoresizingMask = []
+        chart.autoresizingMask = [.width]
         chartItem.view = chart
-        sessionChart.autoresizingMask = []
+        sessionChart.autoresizingMask = [.width]
         sessionChartItem.view = sessionChart
         for i in [weeklyItem, weeklyBarItem, weeklyProjItem, chartItem, resetItem, sessionItem, sessionBarItem, sessionProjItem, sessionChartItem] {
             i.isEnabled = false; menu.addItem(i)
@@ -839,9 +839,10 @@ final class App: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigation
         let views = menu.items.compactMap { $0.view }.filter { !($0 is UsageBarView) && !($0 is HistoryChartView) && $0 !== updatedView }
         menuWidth = max(menuWidth, views.map { $0.frame.width }.max() ?? 0)
         for v in menu.items.compactMap({ $0.view }) {
+            // Bars and charts stretch to whatever width the menu really is, so they always reach both edges.
+            if v is HistoryChartView || v is UsageBarView { v.autoresizingMask = [.width]; continue }
             v.autoresizingMask = []
-            // The menu is 18.5pt wider than the text views (the checkmark column); charts use all of it.
-            v.setFrameSize(NSSize(width: v is HistoryChartView ? menuWidth + 18.5 : menuWidth, height: v.frame.height))
+            v.setFrameSize(NSSize(width: menuWidth, height: v.frame.height))
         }
         // The menu is sometimes laid out ~18pt wider than its views on first open (room for a checkmark
         // column); a floor at that width keeps it identical before and after the first refresh.
@@ -936,12 +937,14 @@ final class App: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigation
     // wash out the bold usage lines), but leaves custom views alone. Left inset matches the text of the
     // regular items, which leave room for the checkmark column.
     static let infoInset: CGFloat = 28
+    static let usageInset: CGFloat = 12     // text starts ~14pt in (the text field adds ~2pt), in line with the bars
 
     func infoView(_ text: NSAttributedString, height: CGFloat) -> NSView {
         let label = NSTextField(labelWithAttributedString: text)
         label.sizeToFit()
-        let view = NSView(frame: NSRect(x: 0, y: 0, width: Self.infoInset + label.frame.width + 16, height: height))
-        label.frame.origin = NSPoint(x: Self.infoInset, y: (height - label.frame.height) / 2)
+        // Usage lines start at the same left edge as the bars and charts (the NSTextField has ~2pt of its own margin).
+        let view = NSView(frame: NSRect(x: 0, y: 0, width: Self.usageInset + label.frame.width + 14, height: height))
+        label.frame.origin = NSPoint(x: Self.usageInset, y: (height - label.frame.height) / 2)
         view.addSubview(label)
         view.autoresizingMask = [.width]
         return view
