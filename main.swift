@@ -68,7 +68,7 @@ enum Store {
 
 // Newest first. Keep the top entry in sync with CFBundleShortVersionString in build.sh.
 let changelog: [(version: String, notes: [String])] = [
-    ("1.4.0", ["The mascot now shows your weekly pace: terracotta normally, amber if you are on track to run out 12+ hours before the reset, red at 36+ hours", "Based on how long you would be locked out, so using it all up near the end of the week stays calm", "New Refresh Every menu: choose 5 or 10 seconds, 30 seconds, 1, 2 or 5 minutes (default 5), or Auto, which polls quickly while your usage is moving and eases off when it stops; backs off after failures and slows itself down if claude.ai rate-limits", "Polling pauses while the Mac sleeps, the screen is off or locked", "The dropdown charts your week and your current 5-hour session, with the forecast dotted to the reset (history is kept locally for 8 days)", "New Options menu: turn either chart off, plus Refresh Every, Launch at Login and About"]),
+    ("1.4.0", ["The mascot now shows your weekly pace: terracotta normally, amber if you are on track to run out 12+ hours before the reset, red at 36+ hours", "Based on how long you would be locked out, so using it all up near the end of the week stays calm", "New Refresh Every menu: Auto (the default) polls quickly while your usage is moving and eases off when it stops, or choose 5 or 10 seconds, 30 seconds, 1, 2 or 5 minutes; backs off after failures and slows itself down if claude.ai rate-limits", "Polling pauses while the Mac sleeps, the screen is off or locked", "The dropdown charts your week and your current 5-hour session, with the forecast dotted to the reset (history is kept locally for 8 days)", "New Options menu: turn either chart off, plus Refresh Every, Launch at Login and About"]),
     ("1.3.0", ["Dropdown shows a usage bar under the weekly and 5-hour limits, like the Claude usage page", "Bars turn yellow, orange and red at the same 60/80/90% points as the menu bar", "Shorter prediction wording, so the dropdown stays narrow"]),
     ("1.2.0", ["About checks GitHub for a newer release and offers a download button when there is one", "Only checks when you open About; nothing runs in the background"]),
     ("1.1.1", ["About window: roomier layout, and a link to the GitHub repo", "App icon: removed faint seams between the mascot's pixels"]),
@@ -123,15 +123,16 @@ final class App: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigation
 
     // How often to ask claude.ai for fresh numbers. Chosen from the "Refresh Every" submenu and remembered.
     static let pollChoices: [(title: String, seconds: TimeInterval)] = [
-        ("Auto (faster while you're working)", 0), ("5 seconds", 5), ("10 seconds", 10), ("30 seconds", 30), ("1 minute", 60), ("2 minutes", 120), ("5 minutes (default)", 300)]
-    static let defaultInterval: TimeInterval = 300
+        ("Auto (default)", 0), ("5 seconds", 5), ("10 seconds", 10), ("30 seconds", 30), ("1 minute", 60), ("2 minutes", 120), ("5 minutes", 300)]
+    static let defaultInterval: TimeInterval = 0       // Auto
+    static let idleInterval: TimeInterval = 300        // Auto's slowest rhythm
     var interval: TimeInterval = {      // 0 = Auto
         guard let saved = UserDefaults.standard.object(forKey: "pollInterval") as? Double,
               App.pollChoices.contains(where: { $0.seconds == saved }) else { return App.defaultInterval }
         return saved
     }()
     var autoMode: Bool { interval == 0 }
-    var baseInterval: TimeInterval { autoMode ? App.defaultInterval : interval }
+    var baseInterval: TimeInterval { autoMode ? App.idleInterval : interval }
     var lastChange: Date?                 // when the usage numbers last moved (drives Auto)
     var currentWait: TimeInterval = 300   // how long the current countdown is
     var paused = false                    // asleep, screen off or locked: no polling

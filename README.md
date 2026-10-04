@@ -14,7 +14,7 @@ A tiny macOS menu bar app that shows your **Claude weekly and 5-hour usage limit
 - Dropdown with usage bars (like the Claude usage page), exact reset times, an "at this pace" prediction (like the Claude app's usage page), and when it last/next refreshed
 - The mascot changes color with your weekly pace (calm, amber, or red) and blinks, shuffles and waves now and then (click it for a reaction)
 - About checks GitHub for a newer release (only when you open it) and offers a download button if there is one
-- Native Swift, a single ~150 KB binary, no dependencies. It polls every 5 minutes by default and is idle otherwise.
+- Native Swift, a single binary under 500 KB, no dependencies. By default it checks every 5 minutes while your usage is steady (every 15 seconds while it's moving) and is idle otherwise.
 - A **Refresh Every** menu lets you poll faster (from every 5 seconds up to 5 minutes) when you're burning through tokens, or pick **Auto**: it checks every 15 seconds while your usage is moving and eases off when it stops. It pauses while your Mac sleeps or is locked, backs off after failures and slows itself down if claude.ai rate-limits.
 - Small **charts of your week and your current 5-hour session** sit under each bar, with the "at this pace" forecast dotted through to the reset. The readings are kept in a local file (the last 8 days) and never leave your Mac.
 - An **Options** menu keeps preferences tidy: turn either chart off, set the refresh rate, launch at login, and open About.
