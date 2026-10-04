@@ -828,7 +828,8 @@ final class App: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigation
         menuWidth = max(menuWidth, views.map { $0.frame.width }.max() ?? 0)
         for v in menu.items.compactMap({ $0.view }) {
             v.autoresizingMask = []
-            v.setFrameSize(NSSize(width: menuWidth, height: v.frame.height))
+            // The menu is 18.5pt wider than the text views (the checkmark column); charts use all of it.
+            v.setFrameSize(NSSize(width: v is HistoryChartView ? menuWidth + 18.5 : menuWidth, height: v.frame.height))
         }
         // The menu is sometimes laid out ~18pt wider than its views on first open (room for a checkmark
         // column); a floor at that width keeps it identical before and after the first refresh.

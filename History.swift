@@ -34,7 +34,7 @@ final class History {
 // The week so far: usage climbing from the left, with the "at this pace" forecast dotted to the reset.
 final class HistoryChartView: NSView {
     static let height: CGFloat = 98
-    static let rightMargin: CGFloat = 28     // mirrors the % labels on the left; holds the end of the 'reset' label
+    static let rightPad: CGFloat = 3.5       // the chart runs nearly to the edge of the menu
 
     var title = "Usage this week"
     var isSession = false            // 5-hour chart: hourly labels instead of day names
@@ -47,7 +47,7 @@ final class HistoryChartView: NSView {
 
     override func draw(_ dirtyRect: NSRect) {
         let plot = NSRect(x: UsageBarView.leftInset, y: 24,
-                          width: max(0, bounds.width - UsageBarView.leftInset - UsageBarView.rightInset - Self.rightMargin),
+                          width: max(0, bounds.width - UsageBarView.leftInset - Self.rightPad),
                           height: bounds.height - 24 - 28)
         guard plot.width > 20, windowEnd > windowStart else { return }
         let span = windowEnd.timeIntervalSince(windowStart)
@@ -64,12 +64,12 @@ final class HistoryChartView: NSView {
         label(title, size: 10).draw(at: NSPoint(x: plot.minX, y: bounds.height - 21))
         // Y axis
         for (pct, text) in [(0.0, "0%"), (50, "50%"), (100, "100%")] {
-            let l = label(text); l.draw(at: NSPoint(x: plot.minX - 4 - l.size().width, y: y(pct) - l.size().height / 2))
+            let l = label(text); l.draw(at: NSPoint(x: plot.minX - 2 - l.size().width, y: y(pct) - l.size().height / 2))
         }
         // X axis: a label at the start of each day (or each hour, for the 5-hour chart), and where the window resets.
         let fmt = DateFormatter(); fmt.dateFormat = isSession ? "HH:mm" : "EEE"
-        let rs = label("reset"); rs.draw(at: NSPoint(x: plot.maxX - rs.size().width / 2, y: 8))
-        let resetLeft = plot.maxX - rs.size().width / 2 - 4
+        let rs = label("reset", size: 8.5); rs.draw(at: NSPoint(x: plot.maxX - rs.size().width, y: 8))
+        let resetLeft = plot.maxX - rs.size().width - 2
         var ticks: [(CGFloat, String)] = []
         if isSession {
             let cal = Calendar.current
@@ -81,8 +81,8 @@ final class HistoryChartView: NSView {
         for (tx, text) in ticks {
             NSColor.labelColor.withAlphaComponent(0.16).setFill()
             NSRect(x: tx, y: plot.minY, width: 1, height: 3).fill()
-            let l = label(text)
-            let x0 = isSession ? tx - l.size().width / 2 : tx + 2
+            let l = label(text, size: 8.5)
+            let x0 = isSession ? tx - l.size().width / 2 : tx
             if x0 + l.size().width < resetLeft, x0 >= plot.minX - 14 { l.draw(at: NSPoint(x: x0, y: 8)) }
         }
 
