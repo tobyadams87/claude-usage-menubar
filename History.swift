@@ -35,7 +35,9 @@ final class History {
 final class HistoryChartView: NSView {
     static let height: CGFloat = 98
 
-    var points: [Sample] = [] { didSet { needsDisplay = true } }
+    var title = "Usage this week"
+    var isSession = false            // 5-hour chart: hourly labels instead of day names
+    var points: [(t: TimeInterval, v: Double)] = [] { didSet { needsDisplay = true } }
     var windowStart = Date()
     var windowEnd = Date()
     var forecast: Double?            // projected % at the reset; nil = no forecast
@@ -58,37 +60,39 @@ final class HistoryChartView: NSView {
         }
 
         // Title and key, so it reads without explanation.
-        label("Usage this week", size: 10).draw(at: NSPoint(x: plot.minX, y: bounds.height - 21))
+        label(title, size: 10).draw(at: NSPoint(x: plot.minX, y: bounds.height - 21))
         // Y axis
         for (pct, text) in [(0.0, "0%"), (50, "50%"), (100, "100%")] {
             let l = label(text); l.draw(at: NSPoint(x: plot.minX - 4 - l.size().width, y: y(pct) - l.size().height / 2))
         }
-        // X axis: a label at the start of each day, and where the week resets.
-        let dayFmt = DateFormatter(); dayFmt.dateFormat = "EEE"
+        // X axis: a label at the start of each day (or each hour, for the 5-hour chart), and where the window resets.
+        let fmt = DateFormatter(); fmt.dateFormat = isSession ? "HH:mm" : "EEE"
         let rs = label("reset"); rs.draw(at: NSPoint(x: plot.maxX - rs.size().width, y: 8))
-        for d in 0..<7 {
-            let l = label(dayFmt.string(from: windowStart.addingTimeInterval(Double(d) * 86400)))
-            let x0 = plot.minX + plot.width * CGFloat(d) / 7 + 2
-            if x0 + l.size().width + 6 < plot.maxX - rs.size().width { l.draw(at: NSPoint(x: x0, y: 8)) }
+        var ticks: [(CGFloat, String)] = []
+        if isSession {
+            let cal = Calendar.current
+            var d = cal.nextDate(after: windowStart.addingTimeInterval(-1), matching: DateComponents(minute: 0, second: 0), matchingPolicy: .nextTime) ?? windowStart
+            while d < windowEnd { ticks.append((x(d.timeIntervalSince1970), fmt.string(from: d))); d = d.addingTimeInterval(3600) }
+        } else {
+            for d in 0..<7 { ticks.append((plot.minX + plot.width * CGFloat(d) / 7, fmt.string(from: windowStart.addingTimeInterval(Double(d) * 86400)))) }
+        }
+        for (tx, text) in ticks {
+            NSColor.labelColor.withAlphaComponent(0.16).setFill()
+            NSRect(x: tx, y: plot.minY, width: 1, height: 3).fill()
+            let l = label(text)
+            let x0 = isSession ? tx - l.size().width / 2 : tx + 2
+            if x0 + l.size().width + 6 < plot.maxX - rs.size().width, x0 >= plot.minX - 2 { l.draw(at: NSPoint(x: x0, y: 8)) }
         }
 
-        // Frame: baseline, a faint 50% line, and a tick at each day.
-        NSColor.labelColor.withAlphaComponent(0.16).setFill()
-        NSRect(x: plot.minX, y: plot.minY, width: plot.width, height: 1).fill()
-        NSColor.labelColor.withAlphaComponent(0.07).setFill()
-        NSRect(x: plot.minX, y: y(50), width: plot.width, height: 1).fill()
-        NSColor.labelColor.withAlphaComponent(0.16).setFill()
-        for d in 1..<7 { NSRect(x: plot.minX + plot.width * CGFloat(d) / 7, y: plot.minY, width: 1, height: 3).fill() }
-
         guard let first = points.first, let last = points.last else { return }
-        if last.t - first.t < 12 * 3600 {
+        if last.t - first.t < (isSession ? 1.5 : 12) * 3600 {
             let n = label("History fills in while the app runs", size: 10)
             n.draw(at: NSPoint(x: plot.minX + 8, y: y(60)))
         }
         let line = NSColor.systemBlue
         let area = NSBezierPath()
         area.move(to: NSPoint(x: x(first.t), y: plot.minY))
-        for p in points { area.line(to: NSPoint(x: x(p.t), y: y(p.w))) }
+        for p in points { area.line(to: NSPoint(x: x(p.t), y: y(p.v))) }
         area.line(to: NSPoint(x: x(last.t), y: plot.minY))
         area.close()
         line.withAlphaComponent(0.18).setFill()
@@ -96,13 +100,13 @@ final class HistoryChartView: NSView {
 
         let path = NSBezierPath()
         path.lineWidth = 1.5; path.lineJoinStyle = .round; path.lineCapStyle = .round
-        path.move(to: NSPoint(x: x(first.t), y: y(first.w)))
-        for p in points.dropFirst() { path.line(to: NSPoint(x: x(p.t), y: y(p.w))) }
+        path.move(to: NSPoint(x: x(first.t), y: y(first.v)))
+        for p in points.dropFirst() { path.line(to: NSPoint(x: x(p.t), y: y(p.v))) }
         line.setStroke()
         path.stroke()
 
         // Forecast: dotted from now to the reset (or to 100% at the time you'd run out).
-        let now = NSPoint(x: x(last.t), y: y(last.w))
+        let now = NSPoint(x: x(last.t), y: y(last.v))
         var end: NSPoint?
         if let r = forecastRunsOut { end = NSPoint(x: x(r.timeIntervalSince1970), y: y(100)) }
         else if let f = forecast { end = NSPoint(x: plot.maxX, y: y(f)) }
@@ -125,7 +129,7 @@ final class HistoryChartView: NSView {
             (warn ? NSColor.systemOrange : NSColor.secondaryLabelColor).setStroke()
             dash.stroke()
         }
-        let cur = label("\(Int(last.w.rounded()))% now", bold: true, color: .labelColor)
+        let cur = label("\(Int(last.v.rounded()))% now", bold: true, color: .labelColor)
         let cx = min(max(plot.minX, now.x - cur.size().width / 2), plot.maxX - cur.size().width)
         let above = now.y + 5 + cur.size().height < bounds.height - 22
         cur.draw(at: NSPoint(x: cx, y: above ? now.y + 4 : now.y - 4 - cur.size().height))

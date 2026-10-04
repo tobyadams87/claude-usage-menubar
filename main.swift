@@ -68,7 +68,7 @@ enum Store {
 
 // Newest first. Keep the top entry in sync with CFBundleShortVersionString in build.sh.
 let changelog: [(version: String, notes: [String])] = [
-    ("1.4.0", ["The mascot now shows your weekly pace: terracotta normally, amber if you are on track to run out 12+ hours before the reset, red at 36+ hours", "Based on how long you would be locked out, so using it all up near the end of the week stays calm", "New Refresh Every menu: choose 5 or 10 seconds, 30 seconds, 1, 2 or 5 minutes (default 5), or Auto, which polls quickly while your usage is moving and eases off when it stops; backs off after failures and slows itself down if claude.ai rate-limits", "Polling pauses while the Mac sleeps, the screen is off or locked", "The dropdown charts your week so far, with the forecast dotted to the reset (history is kept locally for 8 days)"]),
+    ("1.4.0", ["The mascot now shows your weekly pace: terracotta normally, amber if you are on track to run out 12+ hours before the reset, red at 36+ hours", "Based on how long you would be locked out, so using it all up near the end of the week stays calm", "New Refresh Every menu: choose 5 or 10 seconds, 30 seconds, 1, 2 or 5 minutes (default 5), or Auto, which polls quickly while your usage is moving and eases off when it stops; backs off after failures and slows itself down if claude.ai rate-limits", "Polling pauses while the Mac sleeps, the screen is off or locked", "The dropdown charts your week and your current 5-hour session, with the forecast dotted to the reset (history is kept locally for 8 days)"]),
     ("1.3.0", ["Dropdown shows a usage bar under the weekly and 5-hour limits, like the Claude usage page", "Bars turn yellow, orange and red at the same 60/80/90% points as the menu bar", "Shorter prediction wording, so the dropdown stays narrow"]),
     ("1.2.0", ["About checks GitHub for a newer release and offers a download button when there is one", "Only checks when you open About; nothing runs in the background"]),
     ("1.1.1", ["About window: roomier layout, and a link to the GitHub repo", "App icon: removed faint seams between the mascot's pixels"]),
@@ -133,6 +133,12 @@ final class App: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigation
     let history = History()
     let chart = HistoryChartView(frame: NSRect(x: 0, y: 0, width: 300, height: HistoryChartView.height))
     let chartItem = NSMenuItem(title: "", action: nil, keyEquivalent: "")
+    let sessionChart: HistoryChartView = {
+        let c = HistoryChartView(frame: NSRect(x: 0, y: 0, width: 300, height: HistoryChartView.height))
+        c.title = "Usage this session"; c.isSession = true
+        return c
+    }()
+    let sessionChartItem = NSMenuItem(title: "", action: nil, keyEquivalent: "")
     var failures = 0            // consecutive failed refreshes, for backing off
     var timer: Timer?
     let refreshRateItem = NSMenuItem(title: "Refresh Every", action: nil, keyEquivalent: "")
@@ -180,7 +186,9 @@ final class App: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigation
         sessionBarItem.view = sessionBar
         chart.autoresizingMask = []
         chartItem.view = chart
-        for i in [weeklyItem, weeklyBarItem, weeklyProjItem, chartItem, resetItem, sessionItem, sessionBarItem, sessionProjItem] {
+        sessionChart.autoresizingMask = []
+        sessionChartItem.view = sessionChart
+        for i in [weeklyItem, weeklyBarItem, weeklyProjItem, chartItem, resetItem, sessionItem, sessionBarItem, sessionProjItem, sessionChartItem] {
             i.isEnabled = false; menu.addItem(i)
         }
         weeklyBarItem.setHidden(true)
@@ -188,6 +196,7 @@ final class App: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigation
         weeklyProjItem.setHidden(true)
         sessionProjItem.setHidden(true)
         chartItem.setHidden(true)
+        sessionChartItem.setHidden(true)
         menu.addItem(.separator())
         updatedItem.isEnabled = false; menu.addItem(updatedItem)
         let worst = NSTextField(labelWithString: "Update failed 59m ago · next in 4m 59s")
@@ -524,6 +533,7 @@ final class App: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigation
         weeklyBarItem.setHidden(true)
         sessionBarItem.setHidden(true)
         chartItem.setHidden(true)
+        sessionChartItem.setHidden(true)
         updateAuthItems()
     }
 
@@ -733,6 +743,7 @@ final class App: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigation
             weeklyBarItem.setHidden(true)
             sessionBarItem.setHidden(true)
             chartItem.setHidden(true)
+            sessionChartItem.setHidden(true)
             if case .unauthorized = e { signInItem.setHidden(false) }
         }
     }
@@ -864,9 +875,25 @@ final class App: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigation
             case .runsOut(let d): chart.forecast = nil; chart.forecastRunsOut = d
             case .none: chart.forecast = nil; chart.forecastRunsOut = nil
             }
-            chart.points = pts
+            chart.points = pts.map { ($0.t, $0.w) }
             chartItem.setHidden(pts.count < 2)
         } else { chartItem.setHidden(true) }
+
+        // The same for the 5-hour window.
+        if let reset = u.sessionReset, u.session != nil {
+            let start = reset.addingTimeInterval(-5 * 3600)
+            let pts = history.samples(since: start).compactMap { x in x.s.map { (t: x.t, v: $0) } }
+            sessionChart.windowStart = start; sessionChart.windowEnd = reset
+            let sp = Projection.make(utilization: u.session ?? 0, resetsAt: reset, window: 5 * 3600, now: now)
+            sessionChart.warn = sp.runsOutSoon
+            switch sp {
+            case .onPace(let p): sessionChart.forecast = p; sessionChart.forecastRunsOut = nil
+            case .runsOut(let d): sessionChart.forecast = nil; sessionChart.forecastRunsOut = d
+            case .none: sessionChart.forecast = nil; sessionChart.forecastRunsOut = nil
+            }
+            sessionChart.points = pts
+            sessionChartItem.setHidden(pts.count < 2)
+        } else { sessionChartItem.setHidden(true) }
     }
 
     // Info lines are custom views rather than plain menu items: macOS dims disabled items (which would
