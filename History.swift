@@ -81,7 +81,7 @@ final class HistoryChartView: NSView {
             NSRect(x: tx, y: plot.minY, width: 1, height: 3).fill()
             let l = label(text)
             let x0 = isSession ? tx - l.size().width / 2 : tx + 2
-            if x0 + l.size().width + 6 < plot.maxX - rs.size().width, x0 >= plot.minX - 2 { l.draw(at: NSPoint(x: x0, y: 8)) }
+            if x0 + l.size().width + 16 < plot.maxX - rs.size().width, x0 >= plot.minX - 2 { l.draw(at: NSPoint(x: x0, y: 8)) }
         }
 
         guard let first = points.first, let last = points.last else { return }
@@ -129,10 +129,15 @@ final class HistoryChartView: NSView {
             (warn ? NSColor.systemOrange : NSColor.secondaryLabelColor).setStroke()
             dash.stroke()
         }
+        // "N% now": above-left of the dot (clear of both the rising line and the forecast), or below-right
+        // when the dot is too close to the top.
         let cur = label("\(Int(last.v.rounded()))% now", bold: true, color: .labelColor)
-        let cx = min(max(plot.minX, now.x - cur.size().width / 2), plot.maxX - cur.size().width)
-        let above = now.y + 5 + cur.size().height < bounds.height - 22
-        cur.draw(at: NSPoint(x: cx, y: above ? now.y + 4 : now.y - 4 - cur.size().height))
+        let h = cur.size().height, w = cur.size().width
+        if now.y + 3 + h < bounds.height - 22 {
+            cur.draw(at: NSPoint(x: max(plot.minX, now.x - 6 - w), y: now.y + 3))
+        } else {
+            cur.draw(at: NSPoint(x: min(now.x + 4, plot.maxX - w), y: now.y - 3 - h))
+        }
         line.setFill()
         NSBezierPath(ovalIn: NSRect(x: now.x - 2.5, y: now.y - 2.5, width: 5, height: 5)).fill()
     }
