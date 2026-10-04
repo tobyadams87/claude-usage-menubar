@@ -33,7 +33,7 @@ final class History {
 
 // The week so far: usage climbing from the left, with the "at this pace" forecast dotted to the reset.
 final class HistoryChartView: NSView {
-    static let height: CGFloat = 84
+    static let height: CGFloat = 98
 
     var points: [Sample] = [] { didSet { needsDisplay = true } }
     var windowStart = Date()
@@ -43,9 +43,9 @@ final class HistoryChartView: NSView {
     var warn = false
 
     override func draw(_ dirtyRect: NSRect) {
-        let plot = NSRect(x: UsageBarView.leftInset, y: 16,
+        let plot = NSRect(x: UsageBarView.leftInset, y: 24,
                           width: max(0, bounds.width - UsageBarView.leftInset - UsageBarView.rightInset),
-                          height: bounds.height - 16 - 22)
+                          height: bounds.height - 24 - 28)
         guard plot.width > 20, windowEnd > windowStart else { return }
         let span = windowEnd.timeIntervalSince(windowStart)
         func x(_ t: TimeInterval) -> CGFloat {
@@ -58,18 +58,18 @@ final class HistoryChartView: NSView {
         }
 
         // Title and key, so it reads without explanation.
-        label("Usage this week", size: 10).draw(at: NSPoint(x: plot.minX, y: bounds.height - 15))
+        label("Usage this week", size: 10).draw(at: NSPoint(x: plot.minX, y: bounds.height - 21))
         // Y axis
         for (pct, text) in [(0.0, "0%"), (50, "50%"), (100, "100%")] {
             let l = label(text); l.draw(at: NSPoint(x: plot.minX - 4 - l.size().width, y: y(pct) - l.size().height / 2))
         }
         // X axis: a label at the start of each day, and where the week resets.
         let dayFmt = DateFormatter(); dayFmt.dateFormat = "EEE"
-        let rs = label("reset"); rs.draw(at: NSPoint(x: plot.maxX - rs.size().width, y: 2))
+        let rs = label("reset"); rs.draw(at: NSPoint(x: plot.maxX - rs.size().width, y: 8))
         for d in 0..<7 {
             let l = label(dayFmt.string(from: windowStart.addingTimeInterval(Double(d) * 86400)))
             let x0 = plot.minX + plot.width * CGFloat(d) / 7 + 2
-            if x0 + l.size().width + 6 < plot.maxX - rs.size().width { l.draw(at: NSPoint(x: x0, y: 2)) }
+            if x0 + l.size().width + 6 < plot.maxX - rs.size().width { l.draw(at: NSPoint(x: x0, y: 8)) }
         }
 
         // Frame: baseline, a faint 50% line, and a tick at each day.
@@ -81,6 +81,10 @@ final class HistoryChartView: NSView {
         for d in 1..<7 { NSRect(x: plot.minX + plot.width * CGFloat(d) / 7, y: plot.minY, width: 1, height: 3).fill() }
 
         guard let first = points.first, let last = points.last else { return }
+        if last.t - first.t < 12 * 3600 {
+            let n = label("History fills in while the app runs", size: 10)
+            n.draw(at: NSPoint(x: plot.minX + 8, y: y(60)))
+        }
         let line = NSColor.systemBlue
         let area = NSBezierPath()
         area.move(to: NSPoint(x: x(first.t), y: plot.minY))
@@ -106,11 +110,11 @@ final class HistoryChartView: NSView {
             let k = label(forecastRunsOut != nil ? "forecast: runs out" : "forecast", size: 10,
                           color: warn ? .systemOrange : .secondaryLabelColor)
             let kx = plot.maxX - k.size().width
-            k.draw(at: NSPoint(x: kx, y: bounds.height - 15))
+            k.draw(at: NSPoint(x: kx, y: bounds.height - 21))
             (warn ? NSColor.systemOrange : NSColor.secondaryLabelColor).setStroke()
             let key = NSBezierPath(); key.lineWidth = 1.5; key.lineCapStyle = .round
             key.setLineDash([1.5, 3.5], count: 2, phase: 0)
-            key.move(to: NSPoint(x: kx - 26, y: bounds.height - 9)); key.line(to: NSPoint(x: kx - 5, y: bounds.height - 9))
+            key.move(to: NSPoint(x: kx - 26, y: bounds.height - 15)); key.line(to: NSPoint(x: kx - 5, y: bounds.height - 15))
             key.stroke()
         }
         if let end {
@@ -123,7 +127,7 @@ final class HistoryChartView: NSView {
         }
         let cur = label("\(Int(last.w.rounded()))% now", bold: true, color: .labelColor)
         let cx = min(max(plot.minX, now.x - cur.size().width / 2), plot.maxX - cur.size().width)
-        let above = now.y + 5 + cur.size().height < bounds.height - 16
+        let above = now.y + 5 + cur.size().height < bounds.height - 22
         cur.draw(at: NSPoint(x: cx, y: above ? now.y + 4 : now.y - 4 - cur.size().height))
         line.setFill()
         NSBezierPath(ovalIn: NSRect(x: now.x - 2.5, y: now.y - 2.5, width: 5, height: 5)).fill()
