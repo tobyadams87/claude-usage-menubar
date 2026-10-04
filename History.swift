@@ -87,10 +87,13 @@ final class HistoryChartView: NSView {
         }
 
         let span0 = (points.last?.t ?? 0) - (points.first?.t ?? 0)
-        if span0 < (isSession ? 1.5 : 12) * 3600 {
-            label("History fills in while the app runs", size: 10).draw(at: NSPoint(x: plot.minX + 8, y: y(60)))
+        let showNote = span0 < (isSession ? 1.5 : 12) * 3600
+        let note = label("History fills in while the app runs", size: 10)
+        let noteRect = NSRect(origin: NSPoint(x: plot.minX + 8, y: y(60)), size: note.size())
+        guard let first = points.first, let last = points.last else {
+            if showNote { note.draw(at: noteRect.origin) }
+            return
         }
-        guard let first = points.first, let last = points.last else { return }
         let line = NSColor.systemBlue
         let area = NSBezierPath()
         area.move(to: NSPoint(x: x(first.t), y: plot.minY))
@@ -135,10 +138,32 @@ final class HistoryChartView: NSView {
         // when the dot is too close to the top.
         let cur = label("\(Int(last.v.rounded()))% now", bold: true, color: .labelColor)
         let h = cur.size().height, w = cur.size().width
-        if now.y + 3 + h < bounds.height - 22 {
-            cur.draw(at: NSPoint(x: max(plot.minX, now.x - 6 - w), y: now.y + 3))
-        } else {
-            cur.draw(at: NSPoint(x: min(now.x + 4, plot.maxX - w), y: now.y - 3 - h))
+        let curOrigin = now.y + 3 + h < bounds.height - 22
+            ? NSPoint(x: max(plot.minX, now.x - 6 - w), y: now.y + 3)
+            : NSPoint(x: min(now.x + 4, plot.maxX - w), y: now.y - 3 - h)
+        cur.draw(at: curOrigin)
+
+        // The "history fills in" note is only shown while nothing would be drawn over it or cross it:
+        // not the line, the shaded area under it, the forecast, or the "now" label.
+        if showNote {
+            let box = noteRect.insetBy(dx: -4, dy: -3)
+            var hit = box.intersects(NSRect(origin: curOrigin, size: cur.size()))
+            let pts = points.map { NSPoint(x: x($0.t), y: y($0.v)) }
+            for (a, b) in zip(pts, pts.dropFirst()) + (pts.count == 1 ? [(pts[0], pts[0])] : []) {
+                for i in 0...24 {
+                    let f = CGFloat(i) / 24
+                    let p = NSPoint(x: a.x + (b.x - a.x) * f, y: a.y + (b.y - a.y) * f)
+                    // under the line is shaded, so anything at or above the note's bottom within its width covers it
+                    if p.x >= box.minX && p.x <= box.maxX && p.y >= box.minY { hit = true }
+                }
+            }
+            if let end {
+                for i in 0...24 {
+                    let f = CGFloat(i) / 24
+                    if box.contains(NSPoint(x: now.x + (end.x - now.x) * f, y: now.y + (end.y - now.y) * f)) { hit = true }
+                }
+            }
+            if !hit { note.draw(at: noteRect.origin) }
         }
         line.setFill()
         NSBezierPath(ovalIn: NSRect(x: now.x - 2.5, y: now.y - 2.5, width: 5, height: 5)).fill()
