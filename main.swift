@@ -68,7 +68,7 @@ enum Store {
 
 // Newest first. Keep the top entry in sync with CFBundleShortVersionString in build.sh.
 let changelog: [(version: String, notes: [String])] = [
-    ("1.4.0", ["The mascot now shows your weekly pace: terracotta normally, amber if you are on track to run out 12+ hours before the reset, red at 36+ hours", "Based on how long you would be locked out, so using it all up near the end of the week stays calm", "New Refresh Every menu: choose 5 or 10 seconds, 30 seconds, 1, 2 or 5 minutes (default 5), or Auto, which polls quickly while your usage is moving and eases off when it stops; backs off after failures and slows itself down if claude.ai rate-limits", "Polling pauses while the Mac sleeps, the screen is off or locked", "The dropdown charts your week and your current 5-hour session, with the forecast dotted to the reset (history is kept locally for 8 days)"]),
+    ("1.4.0", ["The mascot now shows your weekly pace: terracotta normally, amber if you are on track to run out 12+ hours before the reset, red at 36+ hours", "Based on how long you would be locked out, so using it all up near the end of the week stays calm", "New Refresh Every menu: choose 5 or 10 seconds, 30 seconds, 1, 2 or 5 minutes (default 5), or Auto, which polls quickly while your usage is moving and eases off when it stops; backs off after failures and slows itself down if claude.ai rate-limits", "Polling pauses while the Mac sleeps, the screen is off or locked", "The dropdown charts your week and your current 5-hour session, with the forecast dotted to the reset (history is kept locally for 8 days)", "New Options menu: turn either chart off, plus Refresh Every, Launch at Login and About"]),
     ("1.3.0", ["Dropdown shows a usage bar under the weekly and 5-hour limits, like the Claude usage page", "Bars turn yellow, orange and red at the same 60/80/90% points as the menu bar", "Shorter prediction wording, so the dropdown stays narrow"]),
     ("1.2.0", ["About checks GitHub for a newer release and offers a download button when there is one", "Only checks when you open About; nothing runs in the background"]),
     ("1.1.1", ["About window: roomier layout, and a link to the GitHub repo", "App icon: removed faint seams between the mascot's pixels"]),
@@ -115,6 +115,11 @@ final class App: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigation
     let refreshItem = NSMenuItem(title: "Refresh", action: #selector(refresh), keyEquivalent: "r")
     let aboutItem = NSMenuItem(title: "About ClaudeUsage", action: #selector(showAbout), keyEquivalent: "")
     let loginItem = NSMenuItem(title: "Launch at Login", action: #selector(toggleLogin), keyEquivalent: "")
+    let optionsItem = NSMenuItem(title: "Options", action: nil, keyEquivalent: "")
+    let weeklyChartToggle = NSMenuItem(title: "Weekly Chart", action: #selector(toggleChart(_:)), keyEquivalent: "")
+    let sessionChartToggle = NSMenuItem(title: "5-Hour Chart", action: #selector(toggleChart(_:)), keyEquivalent: "")
+    var showWeeklyChart = UserDefaults.standard.object(forKey: "showWeeklyChart") as? Bool ?? true
+    var showSessionChart = UserDefaults.standard.object(forKey: "showSessionChart") as? Bool ?? true
 
     // How often to ask claude.ai for fresh numbers. Chosen from the "Refresh Every" submenu and remembered.
     static let pollChoices: [(title: String, seconds: TimeInterval)] = [
@@ -208,9 +213,18 @@ final class App: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigation
         uv.addSubview(updatedLabel)
         updatedItem.view = uv
         menu.addItem(.separator())
-        for i in [signInItem, keyItem, refreshItem, refreshRateItem, signOutItem, loginItem, aboutItem] { i.target = self; menu.addItem(i) }
+        for i in [signInItem, keyItem, refreshItem, signOutItem, optionsItem] { i.target = self; menu.addItem(i) }
         refreshRateItem.target = nil
         refreshRateItem.submenu = makeRateMenu()
+        // Everything that is a preference lives under Options, so the main menu stays short as features are added.
+        let options = NSMenu()
+        weeklyChartToggle.target = self; sessionChartToggle.target = self
+        weeklyChartToggle.representedObject = "showWeeklyChart"; sessionChartToggle.representedObject = "showSessionChart"
+        weeklyChartToggle.state = showWeeklyChart ? .on : .off
+        sessionChartToggle.state = showSessionChart ? .on : .off
+        loginItem.target = self; aboutItem.target = self
+        for i in [weeklyChartToggle, sessionChartToggle, .separator(), refreshRateItem, loginItem, .separator(), aboutItem] { options.addItem(i) }
+        optionsItem.submenu = options
         menu.addItem(NSMenuItem(title: "Quit", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
         menu.delegate = self
         item.menu = menu
@@ -258,6 +272,14 @@ final class App: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigation
     func menuDidClose(_ menu: NSMenu) {
         liveTick?.invalidate()
         liveTick = nil
+    }
+
+    @objc func toggleChart(_ sender: NSMenuItem) {
+        guard let key = sender.representedObject as? String else { return }
+        if key == "showWeeklyChart" { showWeeklyChart.toggle(); sender.state = showWeeklyChart ? .on : .off }
+        else { showSessionChart.toggle(); sender.state = showSessionChart ? .on : .off }
+        UserDefaults.standard.set(key == "showWeeklyChart" ? showWeeklyChart : showSessionChart, forKey: key)
+        render()
     }
 
     @objc func toggleLogin() {
@@ -876,7 +898,7 @@ final class App: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigation
             case .none: chart.forecast = nil; chart.forecastRunsOut = nil
             }
             chart.points = pts.map { ($0.t, $0.w) }
-            chartItem.setHidden(pts.count < 2)
+            chartItem.setHidden(pts.count < 2 || !showWeeklyChart)
         } else { chartItem.setHidden(true) }
 
         // The same for the 5-hour window.
@@ -892,7 +914,7 @@ final class App: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigation
             case .none: sessionChart.forecast = nil; sessionChart.forecastRunsOut = nil
             }
             sessionChart.points = pts
-            sessionChartItem.setHidden(pts.count < 2)
+            sessionChartItem.setHidden(pts.count < 2 || !showSessionChart)
         } else { sessionChartItem.setHidden(true) }
     }
 
