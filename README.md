@@ -27,7 +27,7 @@ A tiny macOS menu bar app that shows your **Claude weekly and 5-hour usage limit
 
 <p align="center"><em>The mascot follows your weekly pace. It stays calm unless you're on track to run out 12+ hours before the reset (amber) or 36+ hours before (red). Using it all up near the end of the week stays calm.</em></p>
 
-<p align="center"><img src="dropdown-menu.png" width="428" alt="The ClaudeUsage dropdown: usage and reset times in bold, a usage bar under each limit, and an at-this-pace prediction"></p>
+<p align="center"><img src="dropdown-menu-v14.png" width="440" alt="The ClaudeUsage dropdown: usage and reset times in bold, a usage bar and an at-this-pace prediction under each limit, and a chart of the week and the 5-hour session with a dotted forecast"></p>
 
 <p align="center"><em>The dropdown: usage and reset times in bold, a usage bar for each limit, and an "at this pace" prediction (orange when you're on track to run out).</em></p>
 
