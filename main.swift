@@ -548,7 +548,7 @@ final class App: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigation
     func showSignedOut() {
         mood = .calm
         setPlain("Sign in")
-        weeklyItem.title = "Not signed in"
+        setMain(weeklyItem, "Not signed in")
         resetItem.setHidden(true)
         sessionItem.setHidden(true)
         weeklyProjItem.setHidden(true)
@@ -758,7 +758,7 @@ final class App: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigation
         case .failure(let e):
             // Keep the last known value in the bar if we have one; just explain in the menu.
             if last == nil { setPlain("!") }
-            weeklyItem.title = e.message
+            setMain(weeklyItem, e.message)      // a custom view hides the plain title, so go through setMain
             resetItem.setHidden(true)
             sessionItem.setHidden(true)
             weeklyProjItem.setHidden(true)
@@ -835,7 +835,20 @@ final class App: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigation
 
     // Every custom view gets one shared width, never narrower than the widest seen so far, so the menu
     // doesn't go wider and narrower as the text changes between refreshes.
-    var menuWidth: CGFloat = 0
+    var menuWidth: CGFloat = App.worstCaseWidth()
+
+    // The menu is as wide as its longest possible line from the very first open, so it never grows later
+    // when a longer line (a bigger percentage, a long forecast, an error message) first turns up.
+    static func worstCaseWidth() -> CGFloat {
+        let main = NSFont.systemFont(ofSize: 13, weight: .semibold), small = NSFont.systemFont(ofSize: 11)
+        func w(_ s: String, _ f: NSFont) -> CGFloat { ceil(NSAttributedString(string: s, attributes: [.font: f]).size().width) }
+        let mains = ["Weekly: 100% used · resets in 6d 23h (Wed 12:00 am)", "5-hour: 100% used · resets in 4h 59m (12:59 am)"]
+            + [UsageError.signedOut, .unauthorized, .network, .parse, .rateLimited].map { $0.message }
+        let smalls = ["At this pace you'll run out Wednesday afternoon", "At this pace you'll run out at 12:59 am",
+                      "On pace for about 100% by reset"]
+        let widest = max(mains.map { w($0, main) }.max() ?? 0, smalls.map { w($0, small) }.max() ?? 0)
+        return usageInset + widest + 4 + 14      // + the text field's own padding and the right margin
+    }
     func lockMenuWidth() {
         let views = menu.items.compactMap { $0.view }.filter { !($0 is UsageBarView) && !($0 is HistoryChartView) && $0 !== updatedView }
         menuWidth = max(menuWidth, views.map { $0.frame.width }.max() ?? 0)
