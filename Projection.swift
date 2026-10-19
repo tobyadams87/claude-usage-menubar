@@ -39,14 +39,18 @@ enum Projection {
     private static let weekday: DateFormatter = { let f = DateFormatter(); f.dateFormat = "EEEE"; return f }()
     private static let clock: DateFormatter = { let f = DateFormatter(); f.timeStyle = .short; return f }()
 
-    // "Monday morning", "tomorrow afternoon", "this evening"
+    // "Monday morning", "tomorrow afternoon", "this evening", "tonight"
+    // The small hours (before 5am) still belong to the evening before, as people say it: 2am on Tuesday is
+    // "tonight" on Monday evening, not "tomorrow night" (which would sound like after a Tuesday-morning reset).
     static func dayPhrase(_ d: Date, now: Date, cal: Calendar = .current) -> String {
         let p = part(d, cal)
-        if cal.isDate(d, inSameDayAs: now) { return p == "night" ? "tonight" : "this \(p)" }
-        if let tomorrow = cal.date(byAdding: .day, value: 1, to: now), cal.isDate(d, inSameDayAs: tomorrow) {
-            return "tomorrow \(p)"
+        let dayStart: (Date) -> Date = { cal.startOfDay(for: $0.addingTimeInterval(-5 * 3600)) }
+        let day = dayStart(d), today = dayStart(now)
+        if day == today { return p == "night" ? "tonight" : "this \(p)" }
+        if let tomorrow = cal.date(byAdding: .day, value: 1, to: today), day == tomorrow {
+            return p == "night" ? "tomorrow night" : "tomorrow \(p)"
         }
-        return "\(weekday.string(from: d)) \(p)"
+        return "\(weekday.string(from: day)) \(p)"
     }
 
     func weeklyText(resetsAt: Date?, now: Date = Date()) -> String? {
