@@ -1,0 +1,42 @@
+# Builds and publishes a release when a version tag is pushed (git tag v1.4.1 && git push origin v1.4.1).
+# Release notes come from release-notes/<tag>.md if that file exists, otherwise GitHub generates them.
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check the tag matches the app version
+        run: |
+          APP=$(sed -n 's|.*<key>CFBundleShortVersionString</key><string>\(.*\)</string>.*|\1|p' build.sh)
+          echo "App version: $APP, tag: $GITHUB_REF_NAME"
+          [ "v$APP" = "$GITHUB_REF_NAME" ] || { echo "Tag $GITHUB_REF_NAME does not match version $APP in build.sh"; exit 1; }
+          echo "VERSION=$APP" >> "$GITHUB_ENV"
+
+      - name: Build
+        run: zsh build.sh
+
+      - name: Zip
+        run: |
+          ditto -c -k --keepParent ClaudeUsage.app "ClaudeUsage-$VERSION.zip"
+          shasum -a 256 "ClaudeUsage-$VERSION.zip"
+
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          NOTES="release-notes/$GITHUB_REF_NAME.md"
+          if [ -f "$NOTES" ]; then
+            gh release create "$GITHUB_REF_NAME" "ClaudeUsage-$VERSION.zip" --title "ClaudeUsage $GITHUB_REF_NAME" --notes-file "$NOTES"
+          else
+            gh release create "$GITHUB_REF_NAME" "ClaudeUsage-$VERSION.zip" --title "ClaudeUsage $GITHUB_REF_NAME" --generate-notes
+          fi
